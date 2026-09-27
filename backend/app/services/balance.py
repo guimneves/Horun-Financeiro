@@ -14,12 +14,15 @@ valor final de processos concluídos.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 from sqlmodel import Session, select
 
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition
+from app.db.models.personnel import PersonnelAssignment
 from app.db.models.purchase import IN_PROGRESS_STATES, PurchaseProcess
+from app.services.accrual import compute_accrual
 
 
 @dataclass
@@ -39,6 +42,10 @@ class ItemBalance:
 
 
 def _committed_and_executed(session: Session, position_id: int) -> tuple[Decimal, Decimal]:
+    # Um BudgetPosition só recebe PurchaseProcess OU PersonnelAssignment,
+    # nunca os dois (a rota de criação de cada um bloqueia a categoria
+    # errada) — somar os dois sem checar a categoria aqui é seguro e evita
+    # ter que buscar a posição só pra ramificar.
     processes = session.exec(
         select(PurchaseProcess).where(PurchaseProcess.budget_position_id == position_id)
     ).all()
@@ -49,6 +56,22 @@ def _committed_and_executed(session: Session, position_id: int) -> tuple[Decimal
         (p.final_value for p in processes if p.status == "concluido" and p.final_value is not None),
         Decimal("0"),
     )
+
+    assignments = session.exec(
+        select(PersonnelAssignment).where(PersonnelAssignment.budget_position_id == position_id)
+    ).all()
+    today = date.today()
+    for assignment in assignments:
+        accrual = compute_accrual(
+            start_date=assignment.start_date,
+            end_date=assignment.end_date,
+            status=assignment.status,
+            monthly_rate=assignment.monthly_rate,
+            today=today,
+        )
+        committed += accrual.committed_future_value
+        executed += accrual.accrued_value
+
     return committed, executed
 
 

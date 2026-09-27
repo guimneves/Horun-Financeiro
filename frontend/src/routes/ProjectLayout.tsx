@@ -7,12 +7,11 @@ export interface ProjectContext {
   project: Project
 }
 
-// "Equipe" entra quando Personnel existir (Milestone 3 do plano) — sem
-// isso aqui, o link ficaria morto.
 const NAV_ITEMS = [
   { to: '', label: 'Resumo', end: true },
   { to: 'budget', label: 'Orçamento' },
   { to: 'purchases', label: 'Compras' },
+  { to: 'personnel', label: 'Equipe' },
 ]
 
 export function ProjectLayout() {

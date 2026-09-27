@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.db.models import project as _project_models  # noqa: F401
 from app.db.models import budget as _budget_models  # noqa: F401
 from app.db.models import purchase as _purchase_models  # noqa: F401
+from app.db.models import personnel as _personnel_models  # noqa: F401
 from app.db.models import document as _document_models  # noqa: F401
 
 engine = create_engine(

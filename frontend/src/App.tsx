@@ -6,6 +6,7 @@ import { DashboardPage } from './routes/DashboardPage'
 import { BudgetItemsPage } from './routes/BudgetItemsPage'
 import { PurchaseProcessesPage } from './routes/PurchaseProcessesPage'
 import { PurchaseProcessDetailPage } from './routes/PurchaseProcessDetailPage'
+import { PersonnelPage } from './routes/PersonnelPage'
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="budget" element={<BudgetItemsPage />} />
             <Route path="purchases" element={<PurchaseProcessesPage />} />
             <Route path="purchases/:processId" element={<PurchaseProcessDetailPage />} />
+            <Route path="personnel" element={<PersonnelPage />} />
           </Route>
         </Routes>
 

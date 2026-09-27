@@ -1,9 +1,7 @@
-"""Anexo tipado — ligado a um PurchaseProcess (Milestone 2) ou, mais pra
-frente, a um PersonnelAssignment (Milestone 3; sem FK ainda, a coluna já
-existe pra não precisar de migração depois). Arquivo em disco
-(`app/core/files.py`), só caminho + metadados aqui — ver justificativa em
-services/balance.py/README do plano: volume esperado grande demais pra
-BLOB de banco.
+"""Anexo tipado — ligado a um PurchaseProcess ou a um PersonnelAssignment
+(nunca os dois). Arquivo em disco (`app/core/files.py`), só caminho +
+metadados aqui — volume esperado (várias cotações + NF + comprovantes por
+vários anos de projeto) grande demais pra caber bem em BLOB de banco.
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ MAX_QUOTES_PER_PROCESS = 3
 class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     purchase_process_id: int | None = Field(default=None, foreign_key="purchaseprocess.id", index=True)
-    personnel_assignment_id: int | None = Field(default=None, index=True)
+    personnel_assignment_id: int | None = Field(default=None, foreign_key="personnelassignment.id", index=True)
     doc_type: str
     original_filename: str
     storage_path: str
