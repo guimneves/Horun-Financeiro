@@ -7,6 +7,9 @@ import { BudgetItemsPage } from './routes/BudgetItemsPage'
 import { PurchaseProcessesPage } from './routes/PurchaseProcessesPage'
 import { PurchaseProcessDetailPage } from './routes/PurchaseProcessDetailPage'
 import { PersonnelPage } from './routes/PersonnelPage'
+import { BudgetRevisionsPage } from './routes/BudgetRevisionsPage'
+import { BudgetRevisionEditorPage } from './routes/BudgetRevisionEditorPage'
+import { ProjectMembersPage } from './routes/ProjectMembersPage'
 
 export default function App() {
   return (
@@ -30,6 +33,9 @@ export default function App() {
             <Route path="purchases" element={<PurchaseProcessesPage />} />
             <Route path="purchases/:processId" element={<PurchaseProcessDetailPage />} />
             <Route path="personnel" element={<PersonnelPage />} />
+            <Route path="revisions" element={<BudgetRevisionsPage />} />
+            <Route path="revisions/:revisionId/edit" element={<BudgetRevisionEditorPage />} />
+            <Route path="members" element={<ProjectMembersPage />} />
           </Route>
         </Routes>
 

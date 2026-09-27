@@ -9,9 +9,14 @@ export interface ProjectContext {
 
 const NAV_ITEMS = [
   { to: '', label: 'Resumo', end: true },
-  { to: 'budget', label: 'Orçamento' },
-  { to: 'purchases', label: 'Compras' },
-  { to: 'personnel', label: 'Equipe' },
+  { to: 'budget', label: 'Orçamento', end: false },
+  { to: 'purchases', label: 'Compras', end: false },
+  { to: 'personnel', label: 'Equipe', end: false },
+]
+
+const COORDENADOR_NAV_ITEMS = [
+  { to: 'revisions', label: 'Revisões', end: false },
+  { to: 'members', label: 'Membros', end: false },
 ]
 
 export function ProjectLayout() {
@@ -45,7 +50,7 @@ export function ProjectLayout() {
           </div>
         </div>
         <nav className="flex gap-1">
-          {NAV_ITEMS.map((item) => (
+          {[...NAV_ITEMS, ...(project.my_role === 'coordenador' ? COORDENADOR_NAV_ITEMS : [])].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
