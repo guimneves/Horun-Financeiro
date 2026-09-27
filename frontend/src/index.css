@@ -1,0 +1,26 @@
+/* Tokens específicos deste módulo — os tokens compartilhados já vêm de
+   @horun/design-system/src/tokens.css, importado em main.tsx antes deste
+   arquivo (Prompt_Horun_Core.md, seção 2). Não editamos o pacote
+   compartilhado (usado por todos os outros módulos, ancorado no azul-marinho
+   do NQTR) — em vez disso, sobrescrevemos aqui só a cor primária, pra este
+   módulo ter identidade própria (verde) mantendo o resto do padrão visual
+   (fundo/superfície/borda/texto, os três temas, tipografia) intacto. */
+
+:root,
+[data-theme='light'] {
+  --color-primary: #15803d;
+  --color-primary-hover: #166534;
+  --color-primary-contrast: #ffffff;
+}
+
+[data-theme='dim'] {
+  --color-primary: #4ade80;
+  --color-primary-hover: #86efac;
+  --color-primary-contrast: #052e14;
+}
+
+[data-theme='dark'] {
+  --color-primary: #34d399;
+  --color-primary-hover: #6ee7b7;
+  --color-primary-contrast: #04160d;
+}
