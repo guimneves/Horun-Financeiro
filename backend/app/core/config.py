@@ -14,6 +14,9 @@ class Settings:
         "MODULE_DATABASE_URL", "sqlite:///./financeiro_dev.db"
     )
     secret_key: str = os.environ.get("MODULE_SECRET_KEY", "dev-only-troque-em-producao")
+    # Diretório dos documentos anexados (cotações, notas fiscais, etc.) —
+    # vira volume Docker nomeado em produção, mesma disciplina do Postgres.
+    upload_root: str = os.environ.get("MODULE_UPLOAD_ROOT", "./uploads")
 
 
 settings = Settings()

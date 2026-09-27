@@ -1,0 +1,142 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useOutletContext, useParams } from 'react-router-dom'
+import { purchasesApi } from '../api/purchases'
+import type { PurchaseProcess, TransitionAction } from '../types/purchase'
+import { TERMINAL_STATUSES } from '../types/purchase'
+import { PurchaseStatusBadge } from '../components/purchases/PurchaseStatusBadge'
+import { ActionPanel } from '../components/purchases/ActionPanel'
+import { DocumentsSection } from '../components/purchases/DocumentsSection'
+import { MoneyValue } from '../components/common/MoneyValue'
+import type { ProjectContext } from './ProjectLayout'
+
+export function PurchaseProcessDetailPage() {
+  const { project } = useOutletContext<ProjectContext>()
+  const { processId } = useParams()
+  const [process, setProcess] = useState<PurchaseProcess | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    if (!processId) return
+    purchasesApi
+      .get(project.id, Number(processId))
+      .then(setProcess)
+      .catch((err) => setError(err.message))
+  }, [project.id, processId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (error) return <p className="p-6 text-red-600">Erro ao carregar processo: {error}</p>
+  if (process === null) return <p className="p-6">Carregando…</p>
+
+  const canUploadDocs = !TERMINAL_STATUSES.has(process.status)
+
+  async function handleTransition(input: {
+    action: TransitionAction
+    reason?: string
+    vendor?: string
+    final_value?: string
+  }) {
+    await purchasesApi.transition(project.id, process!.id, input)
+    load()
+  }
+
+  return (
+    <div className="p-6">
+      <Link
+        to={`/projects/${project.id}/purchases`}
+        className="mb-3 inline-block text-sm"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
+        ← Voltar para compras
+      </Link>
+
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+            {process.title}
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            {process.vendor ?? 'Fornecedor a definir'}
+            {process.process_number ? ` · Processo ${process.process_number}` : ''}
+          </p>
+        </div>
+        <PurchaseStatusBadge status={process.status} />
+      </div>
+
+      {process.previous_attempt_id && (
+        <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Nova tentativa —{' '}
+          <Link
+            to={`/projects/${project.id}/purchases/${process.previous_attempt_id}`}
+            style={{ color: 'var(--color-primary)' }}
+          >
+            ver tentativa anterior
+          </Link>
+        </p>
+      )}
+
+      {process.status === 'cancelado' && process.cancel_reason && (
+        <p className="mb-4 rounded-md px-3 py-2 text-sm" style={{ background: '#fee2e2', color: '#b91c1c' }}>
+          Cancelado: {process.cancel_reason}
+        </p>
+      )}
+      {process.status === 'rejeitado' && process.cancel_reason && (
+        <p className="mb-4 rounded-md px-3 py-2 text-sm" style={{ background: '#fee2e2', color: '#b91c1c' }}>
+          Rejeitado pela COPPETEC: {process.cancel_reason}
+        </p>
+      )}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Quantidade
+          </div>
+          <div style={{ color: 'var(--color-text)' }}>{process.quantity}</div>
+        </div>
+        <div>
+          <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Valor unitário estimado
+          </div>
+          <MoneyValue value={process.estimated_unit_value} />
+        </div>
+        <div>
+          <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Valor estimado (comprometido)
+          </div>
+          <MoneyValue value={process.estimated_value} />
+        </div>
+        <div>
+          <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Valor final
+          </div>
+          {process.final_value ? <MoneyValue value={process.final_value} /> : <span>—</span>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            Documentos
+          </h3>
+          <DocumentsSection
+            projectId={project.id}
+            processId={process.id}
+            canUpload={canUploadDocs}
+            canDelete={canUploadDocs}
+            onChange={load}
+          />
+        </div>
+
+        <div>
+          <ActionPanel
+            process={process}
+            isCoordenador={project.my_role === 'coordenador'}
+            onTransition={handleTransition}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

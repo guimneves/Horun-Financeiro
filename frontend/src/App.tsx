@@ -4,6 +4,8 @@ import { ProjectListPage } from './routes/ProjectListPage'
 import { ProjectLayout } from './routes/ProjectLayout'
 import { DashboardPage } from './routes/DashboardPage'
 import { BudgetItemsPage } from './routes/BudgetItemsPage'
+import { PurchaseProcessesPage } from './routes/PurchaseProcessesPage'
+import { PurchaseProcessDetailPage } from './routes/PurchaseProcessDetailPage'
 
 export default function App() {
   return (
@@ -24,6 +26,8 @@ export default function App() {
           <Route path="/projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="budget" element={<BudgetItemsPage />} />
+            <Route path="purchases" element={<PurchaseProcessesPage />} />
+            <Route path="purchases/:processId" element={<PurchaseProcessDetailPage />} />
           </Route>
         </Routes>
 

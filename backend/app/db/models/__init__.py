@@ -5,6 +5,8 @@ from app.db.models.budget import (
     BudgetPosition,
     BudgetRevision,
 )
+from app.db.models.purchase import PurchaseProcess
+from app.db.models.document import Document
 
 __all__ = [
     "Project",
@@ -13,4 +15,6 @@ __all__ = [
     "BudgetRevision",
     "BudgetItem",
     "EXPENSE_CATEGORIES",
+    "PurchaseProcess",
+    "Document",
 ]

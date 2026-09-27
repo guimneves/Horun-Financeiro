@@ -125,7 +125,7 @@ def add_member(
     _membership: ProjectMembership = Depends(require_coordenador),
 ):
     if body.role not in ("coordenador", "colaborador"):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Papel inválido.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Papel inválido.")
     existing = session.exec(
         select(ProjectMembership).where(
             ProjectMembership.project_id == project_id,

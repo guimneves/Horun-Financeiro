@@ -3,13 +3,12 @@ usada tanto pela tabela "Saldo por Item" quanto pelo "Quadro Resumo".
 
 saldo = planejado + rendimentos − comprometido − realizado
 
-`comprometido` (valor de processos de compra em andamento, ainda não
-concluídos nem cancelados/rejeitados) e `realizado` (valor de processos já
-concluídos) chegam de `PurchaseProcess` — Milestone 2. Até lá, os dois
-ficam em zero e o saldo é só o planejado, o que já é útil (mostra o
-orçamento revisado em tempo real) mas ainda não reflete compras em
-andamento; este módulo é atualizado assim que `PurchaseProcess` existir,
-sem mudar a assinatura usada pelas rotas.
+`comprometido` soma o valor estimado de processos de compra ainda em
+andamento (não concluídos nem cancelados/rejeitados) — é isso que faz o
+saldo já refletir uma compra em cotação/autorização antes mesmo dela virar
+nota fiscal, resolvendo a dor original (colaborador não precisa perguntar
+ao coordenador se "aquele valor já tá comprometido"). `realizado` soma o
+valor final de processos concluídos.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ from decimal import Decimal
 from sqlmodel import Session, select
 
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition
+from app.db.models.purchase import IN_PROGRESS_STATES, PurchaseProcess
 
 
 @dataclass
@@ -39,10 +39,17 @@ class ItemBalance:
 
 
 def _committed_and_executed(session: Session, position_id: int) -> tuple[Decimal, Decimal]:
-    # Placeholder até o PurchaseProcess existir (Milestone 2) — mantém a
-    # assinatura estável para o resto do código já depender dela.
-    del session, position_id
-    return Decimal("0"), Decimal("0")
+    processes = session.exec(
+        select(PurchaseProcess).where(PurchaseProcess.budget_position_id == position_id)
+    ).all()
+    committed = sum(
+        (p.estimated_value for p in processes if p.status in IN_PROGRESS_STATES), Decimal("0")
+    )
+    executed = sum(
+        (p.final_value for p in processes if p.status == "concluido" and p.final_value is not None),
+        Decimal("0"),
+    )
+    return committed, executed
 
 
 def item_balances(session: Session, revision_id: int, category: str | None = None) -> list[ItemBalance]:

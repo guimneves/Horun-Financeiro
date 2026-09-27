@@ -8,11 +8,11 @@ const API_BASE = import.meta.env.DEV
   : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  status: number
+
+  constructor(status: number, message: string) {
     super(message)
+    this.status = status
   }
 }
 

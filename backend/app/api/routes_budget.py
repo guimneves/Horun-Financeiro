@@ -194,7 +194,7 @@ def create_item(
     if revision.status != "rascunho":
         raise HTTPException(status.HTTP_409_CONFLICT, "Só é possível editar itens numa revisão em rascunho.")
     if body.category not in EXPENSE_CATEGORIES:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Categoria inválida.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Categoria inválida.")
 
     position = session.exec(
         select(BudgetPosition).where(

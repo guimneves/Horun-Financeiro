@@ -7,11 +7,12 @@ export interface ProjectContext {
   project: Project
 }
 
-// "Compras" e "Equipe" entram quando PurchaseProcess/Personnel existirem
-// (Milestones 2/3 do plano) — sem isso aqui, os links ficariam mortos.
+// "Equipe" entra quando Personnel existir (Milestone 3 do plano) — sem
+// isso aqui, o link ficaria morto.
 const NAV_ITEMS = [
   { to: '', label: 'Resumo', end: true },
   { to: 'budget', label: 'Orçamento' },
+  { to: 'purchases', label: 'Compras' },
 ]
 
 export function ProjectLayout() {
