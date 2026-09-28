@@ -6,8 +6,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_auth, routes_budget, routes_categories, routes_personnel, routes_projects, routes_purchases
+from app.api import (
+    routes_auth,
+    routes_budget,
+    routes_categories,
+    routes_known_users,
+    routes_personnel,
+    routes_projects,
+    routes_purchases,
+)
 from app.core.identity import DEV_MODE
+from app.core.known_users_middleware import KnownUsersMiddleware
 from app.db.session import create_db_and_tables
 
 
@@ -18,6 +27,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Horun · Financeiro", version="0.1.0", lifespan=lifespan)
+
+# Registra quem já apareceu numa requisição (ver core/known_users_middleware.py)
+# — precisa vir antes do CORS na ordem de registro pra ficar na camada
+# interna da pilha (CORS por fora, cobrindo toda resposta, inclusive erro).
+app.add_middleware(KnownUsersMiddleware)
 
 if DEV_MODE:
     # Só em desenvolvimento standalone: o frontend (Vite, porta 5173) e o
@@ -37,6 +51,7 @@ app.include_router(routes_categories.router)
 app.include_router(routes_budget.router)
 app.include_router(routes_purchases.router)
 app.include_router(routes_personnel.router)
+app.include_router(routes_known_users.router)
 
 
 @app.get("/health")

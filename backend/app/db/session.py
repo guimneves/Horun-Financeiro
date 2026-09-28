@@ -25,6 +25,7 @@ from app.db.models import purchase as _purchase_models  # noqa: F401
 from app.db.models import personnel as _personnel_models  # noqa: F401
 from app.db.models import document as _document_models  # noqa: F401
 from app.db.models import module_settings as _module_settings_models  # noqa: F401
+from app.db.models import known_user as _known_user_models  # noqa: F401
 
 engine = create_engine(
     settings.database_url,
