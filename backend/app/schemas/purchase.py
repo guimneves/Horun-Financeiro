@@ -52,7 +52,6 @@ class TransitionRequest(BaseModel):
     reason: str | None = None
     vendor: str | None = None
     process_number: str | None = None
-    estimated_value: Decimal | None = None
     final_value: Decimal | None = None
 
 

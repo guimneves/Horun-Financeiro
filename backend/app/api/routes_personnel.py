@@ -145,6 +145,11 @@ def update_assignment(
     _membership: ProjectMembership = Depends(require_coordenador),
 ):
     assignment = _get_assignment(session, project_id, assignment_id)
+    if assignment.status == "encerrado":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Atribuição encerrada não pode mais ser editada — reabra uma nova atribuição se for o caso.",
+        )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(assignment, field, value)
     session.add(assignment)
@@ -167,6 +172,12 @@ def close_assignment(
         raise HTTPException(status.HTTP_409_CONFLICT, "Atribuição já está encerrada.")
     if body.end_date < assignment.start_date:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Data de fim anterior à data de início.")
+    if body.end_date > date.today():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Data de fim não pode ser no futuro — feche a atribuição só quando ela já tiver terminado "
+            "(um fim futuro já combinado conta como comprometido, não como encerrado).",
+        )
     assignment.status = "encerrado"
     assignment.end_date = body.end_date
     session.add(assignment)
@@ -221,7 +232,7 @@ async def upload_assignment_document(
 ):
     _get_assignment(session, project_id, assignment_id)
     content = await file.read()
-    storage_path, size = save_upload(project_id, assignment_id, file.filename or "arquivo", content)
+    storage_path, size = save_upload(project_id, "personnel", assignment_id, file.filename or "arquivo", content)
     document = Document(
         personnel_assignment_id=assignment_id,
         doc_type="recibo_pessoal",
@@ -267,10 +278,14 @@ def delete_assignment_document(
     session: Session = Depends(get_session),
     membership: ProjectMembership = Depends(get_membership),
 ):
-    _get_assignment(session, project_id, assignment_id)
+    assignment = _get_assignment(session, project_id, assignment_id)
     doc = session.get(Document, doc_id)
     if doc is None or doc.personnel_assignment_id != assignment_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado.")
+    if assignment.status == "encerrado":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Atribuição encerrada — documentos ficam retidos para auditoria."
+        )
     if doc.uploaded_by_user_id != identity.user_id and membership.role != "coordenador":
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Só quem enviou o documento ou o coordenador pode removê-lo."

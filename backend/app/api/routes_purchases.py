@@ -14,7 +14,7 @@ from app.core.permissions import get_membership
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
 from app.db.models.document import DOC_TYPES, MAX_QUOTES_PER_PROCESS, Document
 from app.db.models.project import ProjectMembership
-from app.db.models.purchase import TERMINAL_STATES, PurchaseProcess
+from app.db.models.purchase import PRE_AUTHORIZATION_STATES, TERMINAL_STATES, PurchaseProcess
 from app.db.session import get_session
 from app.schemas.purchase import (
     DocumentOut,
@@ -125,11 +125,15 @@ def update_process(
     process_id: int,
     body: PurchaseProcessUpdate,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     process = _get_process(session, project_id, process_id)
     if process.status in TERMINAL_STATES:
         raise HTTPException(status.HTTP_409_CONFLICT, "Processo encerrado não pode mais ser editado.")
+    if process.status not in PRE_AUTHORIZATION_STATES and membership.role != "coordenador":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Só o coordenador pode editar um processo já autorizado."
+        )
 
     data = body.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -160,7 +164,6 @@ def transition_process(
             reason=body.reason,
             vendor=body.vendor,
             process_number=body.process_number,
-            estimated_value=body.estimated_value,
             final_value=body.final_value,
         )
     except TransitionError as exc:
@@ -221,7 +224,7 @@ async def upload_document(
             )
 
     content = await file.read()
-    storage_path, size = save_upload(project_id, process_id, file.filename or "arquivo", content)
+    storage_path, size = save_upload(project_id, "purchases", process_id, file.filename or "arquivo", content)
     document = Document(
         purchase_process_id=process_id,
         doc_type=doc_type,

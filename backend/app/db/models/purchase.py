@@ -34,6 +34,10 @@ PURCHASE_STATES = [
 ]
 TERMINAL_STATES = {"concluido", "rejeitado", "cancelado"}
 IN_PROGRESS_STATES = set(PURCHASE_STATES) - TERMINAL_STATES
+# Antes da autorização, quem está tocando a compra (não necessariamente o
+# coordenador) ainda pode editar os campos básicos do processo — depois de
+# autorizado, só o coordenador mexe (ver update_process em routes_purchases.py).
+PRE_AUTHORIZATION_STATES = {"verificacao_orcamento", "cotacao", "aguardando_autorizacao"}
 
 
 class PurchaseProcess(SQLModel, table=True):

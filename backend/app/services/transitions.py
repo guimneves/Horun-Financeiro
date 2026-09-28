@@ -89,6 +89,14 @@ TRANSITIONS: dict[str, TransitionRule] = {
     "cancelar": TransitionRule(_ALL_NON_TERMINAL, "cancelado", False, requires_reason=True),
 }
 
+# Cancelar continua aberto a qualquer membro ENQUANTO a compra ainda não foi
+# autorizada (desistir de uma cotação é operacional, não uma decisão do
+# coordenador) — mas uma vez autorizada, só o coordenador pode desfazer a
+# própria decisão (ou o que veio depois dela).
+_CANCELAR_REQUER_COORDENADOR_A_PARTIR_DE = frozenset(
+    {"autorizado", "nota_fiscal_emitida", "comprovante_recebimento"}
+)
+
 
 def apply_transition(
     session: Session,
@@ -99,7 +107,6 @@ def apply_transition(
     reason: str | None = None,
     vendor: str | None = None,
     process_number: str | None = None,
-    estimated_value: Decimal | None = None,
     final_value: Decimal | None = None,
 ) -> PurchaseProcess:
     from datetime import datetime, timezone
@@ -109,7 +116,10 @@ def apply_transition(
         raise TransitionError(f"Ação desconhecida: {action!r}.")
     if process.status not in rule.from_states:
         raise TransitionError(f"Não é possível '{action}' a partir do estado '{process.status}'.")
-    if rule.coordenador_only and not is_coordenador:
+    requer_coordenador = rule.coordenador_only or (
+        action == "cancelar" and process.status in _CANCELAR_REQUER_COORDENADOR_A_PARTIR_DE
+    )
+    if requer_coordenador and not is_coordenador:
         raise TransitionError("Ação restrita ao coordenador do projeto.")
     if rule.requires_reason and not reason:
         raise TransitionError("Informe o motivo.")
@@ -125,8 +135,10 @@ def apply_transition(
             process.vendor = vendor
         if process_number is not None:
             process.process_number = process_number
-        if estimated_value is not None:
-            process.estimated_value = estimated_value
+        # estimated_value NÃO é editável aqui de propósito — o valor
+        # "comprometido" tem que continuar rastreável até quantity ×
+        # estimated_unit_value (editáveis via PATCH antes da autorização),
+        # nunca um número solto vindo de uma transição.
     if action == "emitir_nota_fiscal":
         process.final_value = final_value
     if action in ("rejeitar", "cancelar"):

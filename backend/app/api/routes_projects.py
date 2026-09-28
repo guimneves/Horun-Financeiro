@@ -158,5 +158,18 @@ def remove_member(
     member = session.get(ProjectMembership, membership_id)
     if member is None or member.project_id != project_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Membro não encontrado.")
+    if member.role == "coordenador":
+        other_coordenadores = session.exec(
+            select(ProjectMembership).where(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.role == "coordenador",
+                ProjectMembership.id != membership_id,
+            )
+        ).first()
+        if other_coordenadores is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Não é possível remover o último coordenador do projeto — promova outro membro antes.",
+            )
     session.delete(member)
     session.commit()

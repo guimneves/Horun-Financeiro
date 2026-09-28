@@ -147,6 +147,8 @@ def activate_revision(
 ):
     project = session.get(Project, project_id)
     revision = _get_revision(session, project_id, revision_id)
+    if revision.status != "rascunho":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Só é possível ativar uma revisão em rascunho.")
 
     if project.active_revision_id is not None and project.active_revision_id != revision.id:
         previous = session.get(BudgetRevision, project.active_revision_id)

@@ -15,9 +15,13 @@ from app.core.config import settings
 UPLOAD_ROOT = Path(settings.upload_root).resolve()
 
 
-def save_upload(project_id: int, purchase_process_id: int, filename: str, content: bytes) -> tuple[str, int]:
+def save_upload(project_id: int, owner_kind: str, owner_id: int, filename: str, content: bytes) -> tuple[str, int]:
+    """`owner_kind` separa o namespace de armazenamento por tipo de dono
+    (ex. "purchases", "personnel") — sem isso, um PurchaseProcess e um
+    PersonnelAssignment com o mesmo id numérico no mesmo projeto cairiam no
+    mesmo diretório."""
     safe_name = f"{uuid.uuid4().hex}_{Path(filename).name}"
-    rel_dir = Path("projects") / str(project_id) / "purchases" / str(purchase_process_id)
+    rel_dir = Path("projects") / str(project_id) / owner_kind / str(owner_id)
     abs_dir = UPLOAD_ROOT / rel_dir
     abs_dir.mkdir(parents=True, exist_ok=True)
     (abs_dir / safe_name).write_bytes(content)

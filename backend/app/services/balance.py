@@ -41,14 +41,13 @@ class ItemBalance:
     balance: Decimal
 
 
-def _committed_and_executed(session: Session, position_id: int) -> tuple[Decimal, Decimal]:
+def _committed_and_executed_from(
+    processes: list[PurchaseProcess], assignments: list[PersonnelAssignment], today: date
+) -> tuple[Decimal, Decimal]:
     # Um BudgetPosition só recebe PurchaseProcess OU PersonnelAssignment,
     # nunca os dois (a rota de criação de cada um bloqueia a categoria
     # errada) — somar os dois sem checar a categoria aqui é seguro e evita
     # ter que buscar a posição só pra ramificar.
-    processes = session.exec(
-        select(PurchaseProcess).where(PurchaseProcess.budget_position_id == position_id)
-    ).all()
     committed = sum(
         (p.estimated_value for p in processes if p.status in IN_PROGRESS_STATES), Decimal("0")
     )
@@ -57,10 +56,6 @@ def _committed_and_executed(session: Session, position_id: int) -> tuple[Decimal
         Decimal("0"),
     )
 
-    assignments = session.exec(
-        select(PersonnelAssignment).where(PersonnelAssignment.budget_position_id == position_id)
-    ).all()
-    today = date.today()
     for assignment in assignments:
         accrual = compute_accrual(
             start_date=assignment.start_date,
@@ -84,9 +79,32 @@ def item_balances(session: Session, revision_id: int, category: str | None = Non
     if category is not None:
         query = query.where(BudgetPosition.category == category)
 
+    rows = list(session.exec(query))
+    position_ids = [position.id for _, position in rows]
+
+    # Uma consulta pra cada tabela em vez de duas por item — evita N+1
+    # quando a revisão tem dezenas/centenas de linhas (comum na planilha
+    # real que este módulo substitui).
+    processes_by_position: dict[int, list[PurchaseProcess]] = {}
+    assignments_by_position: dict[int, list[PersonnelAssignment]] = {}
+    if position_ids:
+        for process in session.exec(
+            select(PurchaseProcess).where(PurchaseProcess.budget_position_id.in_(position_ids))
+        ):
+            processes_by_position.setdefault(process.budget_position_id, []).append(process)
+        for assignment in session.exec(
+            select(PersonnelAssignment).where(PersonnelAssignment.budget_position_id.in_(position_ids))
+        ):
+            assignments_by_position.setdefault(assignment.budget_position_id, []).append(assignment)
+
+    today = date.today()
     results: list[ItemBalance] = []
-    for item, position in session.exec(query):
-        committed, executed = _committed_and_executed(session, position.id)
+    for item, position in rows:
+        committed, executed = _committed_and_executed_from(
+            processes_by_position.get(position.id, []),
+            assignments_by_position.get(position.id, []),
+            today,
+        )
         balance = item.planned_value + item.yield_amount - committed - executed
         results.append(
             ItemBalance(
