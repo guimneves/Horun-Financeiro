@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.files import delete_file, resolve_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership
+from app.core.redaction import money
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
 from app.db.models.document import DOC_TYPES, MAX_QUOTES_PER_PROCESS, Document
 from app.db.models.project import ProjectMembership
@@ -35,6 +36,30 @@ def _get_process(session: Session, project_id: int, process_id: int) -> Purchase
     return process
 
 
+def _process_out(process: PurchaseProcess, *, visible: bool) -> PurchaseProcessOut:
+    return PurchaseProcessOut(
+        id=process.id,
+        project_id=process.project_id,
+        budget_position_id=process.budget_position_id,
+        process_number=process.process_number,
+        title=process.title,
+        vendor=process.vendor,
+        quantity=process.quantity,
+        estimated_unit_value=money(process.estimated_unit_value, visible=visible),
+        estimated_value=money(process.estimated_value, visible=visible),
+        final_value=money(process.final_value, visible=visible),
+        asset_registration_flag=process.asset_registration_flag,
+        status=process.status,
+        previous_attempt_id=process.previous_attempt_id,
+        cancel_reason=process.cancel_reason,
+        created_by_username=process.created_by_username,
+        created_at=process.created_at,
+        updated_at=process.updated_at,
+        completed_at=process.completed_at,
+        closed_at=process.closed_at,
+    )
+
+
 @router.get("", response_model=list[PurchaseProcessOut])
 def list_processes(
     project_id: int,
@@ -42,7 +67,7 @@ def list_processes(
     position_id: int | None = None,
     status_filter: str | None = None,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     query = select(PurchaseProcess).where(PurchaseProcess.project_id == project_id)
     if position_id is not None:
@@ -63,7 +88,8 @@ def list_processes(
         processes = [p for p in processes if p.budget_position_id in position_ids]
 
     processes.sort(key=lambda p: p.created_at, reverse=True)
-    return processes
+    visible = membership.role == "coordenador"
+    return [_process_out(p, visible=visible) for p in processes]
 
 
 @router.post("", response_model=PurchaseProcessOut, status_code=status.HTTP_201_CREATED)
@@ -72,7 +98,7 @@ def create_process(
     body: PurchaseProcessCreate,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     position = session.get(BudgetPosition, body.budget_position_id)
     if position is None or position.project_id != project_id:
@@ -106,7 +132,7 @@ def create_process(
     session.add(process)
     session.commit()
     session.refresh(process)
-    return process
+    return _process_out(process, visible=membership.role == "coordenador")
 
 
 @router.get("/{process_id}", response_model=PurchaseProcessOut)
@@ -114,9 +140,10 @@ def get_process(
     project_id: int,
     process_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
-    return _get_process(session, project_id, process_id)
+    process = _get_process(session, project_id, process_id)
+    return _process_out(process, visible=membership.role == "coordenador")
 
 
 @router.patch("/{process_id}", response_model=PurchaseProcessOut)
@@ -143,7 +170,7 @@ def update_process(
     session.add(process)
     session.commit()
     session.refresh(process)
-    return process
+    return _process_out(process, visible=membership.role == "coordenador")
 
 
 @router.post("/{process_id}/transition", response_model=PurchaseProcessOut)
@@ -156,7 +183,7 @@ def transition_process(
 ):
     process = _get_process(session, project_id, process_id)
     try:
-        return apply_transition(
+        updated = apply_transition(
             session,
             process,
             action=body.action,
@@ -168,6 +195,7 @@ def transition_process(
         )
     except TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return _process_out(updated, visible=membership.role == "coordenador")
 
 
 def _doc_out(doc: Document) -> DocumentOut:

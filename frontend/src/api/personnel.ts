@@ -1,8 +1,7 @@
-import { api, ApiError } from './client'
+import { API_BASE, api, ApiError } from './client'
+import { getCoordenadorToken } from '../lib/coordenadorSession'
 import type { PurchaseDocument } from '../types/purchase'
 import type { Person, PersonnelAssignment } from '../types/personnel'
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export interface AssignmentCreateInput {
   person_id: number
@@ -40,9 +39,10 @@ export const personnelApi = {
     const form = new FormData()
     if (periodLabel) form.append('period_label', periodLabel)
     form.append('file', file)
+    const token = getCoordenadorToken()
     const resp = await fetch(
       `${API_BASE}/projects/${projectId}/personnel-assignments/${assignmentId}/documents`,
-      { method: 'POST', body: form },
+      { method: 'POST', body: form, headers: token ? { 'X-Horun-Coordenador-Token': token } : undefined },
     )
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}))

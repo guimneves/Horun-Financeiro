@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from app.core.files import delete_file, resolve_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
+from app.core.redaction import money
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
 from app.db.models.document import Document
 from app.db.models.personnel import Person, PersonnelAssignment
@@ -55,7 +56,9 @@ def create_person(
     return person
 
 
-def _assignment_out(session: Session, assignment: PersonnelAssignment, person: Person) -> AssignmentOut:
+def _assignment_out(
+    session: Session, assignment: PersonnelAssignment, person: Person, *, visible: bool
+) -> AssignmentOut:
     accrual = compute_accrual(
         start_date=assignment.start_date,
         end_date=assignment.end_date,
@@ -70,13 +73,13 @@ def _assignment_out(session: Session, assignment: PersonnelAssignment, person: P
         person_name=person.full_name,
         budget_position_id=assignment.budget_position_id,
         role_title=assignment.role_title,
-        monthly_rate=assignment.monthly_rate,
+        monthly_rate=money(assignment.monthly_rate, visible=visible),
         start_date=assignment.start_date,
         end_date=assignment.end_date,
         status=assignment.status,
         accrued_months=accrual.accrued_months,
-        accrued_value=accrual.accrued_value,
-        committed_future_value=accrual.committed_future_value,
+        accrued_value=money(accrual.accrued_value, visible=visible),
+        committed_future_value=money(accrual.committed_future_value, visible=visible),
     )
 
 
@@ -91,13 +94,14 @@ def _get_assignment(session: Session, project_id: int, assignment_id: int) -> Pe
 def list_assignments(
     project_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     assignments = session.exec(
         select(PersonnelAssignment).where(PersonnelAssignment.project_id == project_id)
     ).all()
     people = {p.id: p for p in session.exec(select(Person).where(Person.project_id == project_id))}
-    return [_assignment_out(session, a, people[a.person_id]) for a in assignments]
+    visible = membership.role == "coordenador"
+    return [_assignment_out(session, a, people[a.person_id], visible=visible) for a in assignments]
 
 
 @router.post("/personnel-assignments", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED)
@@ -133,7 +137,7 @@ def create_assignment(
     session.add(assignment)
     session.commit()
     session.refresh(assignment)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 @router.patch("/personnel-assignments/{assignment_id}", response_model=AssignmentOut)
@@ -156,7 +160,7 @@ def update_assignment(
     session.commit()
     session.refresh(assignment)
     person = session.get(Person, assignment.person_id)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 @router.post("/personnel-assignments/{assignment_id}/close", response_model=AssignmentOut)
@@ -184,7 +188,7 @@ def close_assignment(
     session.commit()
     session.refresh(assignment)
     person = session.get(Person, assignment.person_id)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 def _doc_out(doc: Document) -> DocumentOut:

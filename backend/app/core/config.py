@@ -17,6 +17,13 @@ class Settings:
     # Diretório dos documentos anexados (cotações, notas fiscais, etc.) —
     # vira volume Docker nomeado em produção, mesma disciplina do Postgres.
     upload_root: str = os.environ.get("MODULE_UPLOAD_ROOT", "./uploads")
+    # Senha de coordenador inicial — só usada pra criar o registro de
+    # configuração na primeira vez que o módulo sobe (bootstrap). Depois
+    # disso, os coordenadores trocam pela própria interface e este valor
+    # de env deixa de ter qualquer efeito.
+    default_coordenador_password: str = os.environ.get(
+        "MODULE_COORDENADOR_PASSWORD", "troque-esta-senha"
+    )
 
 
 settings = Settings()

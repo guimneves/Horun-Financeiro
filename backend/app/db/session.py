@@ -24,6 +24,7 @@ from app.db.models import budget as _budget_models  # noqa: F401
 from app.db.models import purchase as _purchase_models  # noqa: F401
 from app.db.models import personnel as _personnel_models  # noqa: F401
 from app.db.models import document as _document_models  # noqa: F401
+from app.db.models import module_settings as _module_settings_models  # noqa: F401
 
 engine = create_engine(
     settings.database_url,
@@ -50,9 +51,22 @@ def _run_migrations() -> None:
     pass
 
 
+def _ensure_module_settings() -> None:
+    from app.core.security import hash_password
+    from app.db.models.module_settings import ModuleSettings
+
+    with Session(engine) as session:
+        if session.get(ModuleSettings, 1) is None:
+            session.add(
+                ModuleSettings(id=1, coordenador_password_hash=hash_password(settings.default_coordenador_password))
+            )
+            session.commit()
+
+
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
     _run_migrations()
+    _ensure_module_settings()
 
 
 def get_session() -> Generator[Session, None, None]:

@@ -1,7 +1,6 @@
-import { api, ApiError } from './client'
+import { API_BASE, api, ApiError } from './client'
+import { getCoordenadorToken } from '../lib/coordenadorSession'
 import type { PurchaseDocument, PurchaseProcess, TransitionAction } from '../types/purchase'
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export interface PurchaseProcessCreateInput {
   budget_position_id: number
@@ -17,7 +16,6 @@ export interface TransitionInput {
   reason?: string
   vendor?: string
   process_number?: string
-  estimated_value?: string
   final_value?: string
 }
 
@@ -48,9 +46,10 @@ export const purchasesApi = {
     if (note) form.append('note', note)
     form.append('file', file)
 
+    const token = getCoordenadorToken()
     const resp = await fetch(
       `${API_BASE}/projects/${projectId}/purchase-processes/${processId}/documents`,
-      { method: 'POST', body: form },
+      { method: 'POST', body: form, headers: token ? { 'X-Horun-Coordenador-Token': token } : undefined },
     )
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}))

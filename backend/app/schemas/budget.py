@@ -60,10 +60,12 @@ class BudgetItemOut(BaseModel):
     item_number: int
     description: str
     justification: str
-    unit_value: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py. Colaborador
+    # só sabe se há saldo (has_balance no ItemBalanceOut), não os valores.
+    unit_value: Decimal | None
     planned_quantity: Decimal
-    planned_value: Decimal
-    yield_amount: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
     note: str
 
 
@@ -73,21 +75,23 @@ class ItemBalanceOut(BaseModel):
     item_number: int
     description: str
     justification: str
-    unit_value: Decimal
+    unit_value: Decimal | None
     planned_quantity: Decimal
-    planned_value: Decimal
-    yield_amount: Decimal
-    committed: Decimal
-    executed: Decimal
-    balance: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
+    committed: Decimal | None
+    executed: Decimal | None
+    balance: Decimal | None
+    has_balance: bool
 
 
 class CategorySummaryOut(BaseModel):
     category: str
     label: str
     group: str
-    planned_value: Decimal
-    yield_amount: Decimal
-    committed: Decimal
-    executed: Decimal
-    balance: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
+    committed: Decimal | None
+    executed: Decimal | None
+    balance: Decimal | None
+    has_balance: bool

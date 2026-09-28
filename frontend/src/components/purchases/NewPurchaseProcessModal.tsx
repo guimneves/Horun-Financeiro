@@ -3,6 +3,7 @@ import { budgetApi } from '../../api/budget'
 import { purchasesApi } from '../../api/purchases'
 import type { ItemBalance } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
+import { AvailabilityBadge } from '../common/AvailabilityBadge'
 
 interface NewPurchaseProcessModalProps {
   projectId: number
@@ -25,7 +26,7 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
 
   const selected = items?.find((i) => i.position_id === positionId) ?? null
   const estimatedValue = (Number(quantity) || 0) * (Number(unitValue) || 0)
-  const exceedsBalance = selected !== null && estimatedValue > Number(selected.balance)
+  const exceedsBalance = selected !== null && selected.balance !== null && estimatedValue > Number(selected.balance)
 
   async function handleSubmit() {
     if (positionId === null || !title.trim()) return
@@ -68,14 +69,20 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
           <option value="">Selecione um item…</option>
           {items?.map((item) => (
             <option key={item.position_id} value={item.position_id}>
-              {item.category} · Nº{item.item_number} — {item.description} (saldo {item.balance})
+              {item.category} · Nº{item.item_number} — {item.description}
+              {item.balance !== null ? ` (saldo ${item.balance})` : item.has_balance ? ' (há saldo)' : ' (sem saldo)'}
             </option>
           ))}
         </select>
 
         {selected && (
           <p className="mb-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Saldo disponível: <MoneyValue value={selected.balance} signColored />
+            Saldo disponível:{' '}
+            {selected.balance === null ? (
+              <AvailabilityBadge hasBalance={selected.has_balance} />
+            ) : (
+              <MoneyValue value={selected.balance} signColored />
+            )}
           </p>
         )}
 

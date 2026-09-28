@@ -13,7 +13,10 @@ interface EditableItemRowProps {
 
 export function EditableItemRow({ projectId, revisionId, item, editable, onChanged }: EditableItemRowProps) {
   const [description, setDescription] = useState(item.description)
-  const [unitValue, setUnitValue] = useState(item.unit_value)
+  // unit_value só vem null quando o backend redige valor (colaborador sem
+  // sessão de coordenador) — esta linha só renderiza editável pra
+  // coordenador, então na prática nunca é null aqui.
+  const [unitValue, setUnitValue] = useState(item.unit_value ?? '')
   const [plannedQuantity, setPlannedQuantity] = useState(item.planned_quantity)
 
   async function save(patch: Record<string, string>) {

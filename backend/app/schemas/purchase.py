@@ -33,8 +33,9 @@ class PurchaseProcessOut(BaseModel):
     title: str
     vendor: str | None
     quantity: Decimal
-    estimated_unit_value: Decimal
-    estimated_value: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py.
+    estimated_unit_value: Decimal | None
+    estimated_value: Decimal | None
     final_value: Decimal | None
     asset_registration_flag: bool
     status: str

@@ -1,5 +1,6 @@
 import type { ItemBalance } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
+import { AvailabilityBadge } from '../common/AvailabilityBadge'
 
 export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[]; categoryLabel: string }) {
   if (items.length === 0) return null
@@ -44,7 +45,11 @@ export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[
                   <MoneyValue value={item.executed} />
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <MoneyValue value={item.balance} signColored />
+                  {item.balance === null ? (
+                    <AvailabilityBadge hasBalance={item.has_balance} />
+                  ) : (
+                    <MoneyValue value={item.balance} signColored />
+                  )}
                 </td>
               </tr>
             ))}
