@@ -5,6 +5,7 @@ import { ProjectListPage } from './routes/ProjectListPage'
 import { ProjectLayout } from './routes/ProjectLayout'
 import { DashboardPage } from './routes/DashboardPage'
 import { BudgetItemsPage } from './routes/BudgetItemsPage'
+import { BudgetItemDetailPage } from './routes/BudgetItemDetailPage'
 import { PurchaseProcessesPage } from './routes/PurchaseProcessesPage'
 import { PurchaseProcessDetailPage } from './routes/PurchaseProcessDetailPage'
 import { PersonnelPage } from './routes/PersonnelPage'
@@ -15,6 +16,7 @@ import { OrganizationPage } from './routes/OrganizationPage'
 import { CoordenadorProvider, useCoordenadorSession } from './context/CoordenadorContext'
 import { ProjectsProvider, useProjects } from './context/ProjectsContext'
 import { CoordenadorButton } from './components/common/CoordenadorButton'
+import { DevUserSwitcher } from './components/common/DevUserSwitcher'
 import { AppSidebar } from './components/layout/AppSidebar'
 
 function Header() {
@@ -43,6 +45,7 @@ function Header() {
         )}
       </div>
       <div className="flex items-center gap-2">
+        {import.meta.env.DEV && <DevUserSwitcher />}
         <CoordenadorButton />
         <ThemeToggle />
       </div>
@@ -68,6 +71,7 @@ export default function App() {
                   <Route path="/projects/:projectId" element={<ProjectLayout />}>
                     <Route index element={<DashboardPage />} />
                     <Route path="budget" element={<BudgetItemsPage />} />
+                    <Route path="budget/items/:positionId" element={<BudgetItemDetailPage />} />
                     <Route path="purchases" element={<PurchaseProcessesPage />} />
                     <Route path="purchases/:processId" element={<PurchaseProcessDetailPage />} />
                     <Route path="personnel" element={<PersonnelPage />} />

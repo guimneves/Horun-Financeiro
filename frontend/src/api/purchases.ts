@@ -1,5 +1,6 @@
 import { API_BASE, api, ApiError } from './client'
 import { getCoordenadorToken } from '../lib/coordenadorSession'
+import { getDevIdentity } from '../lib/devIdentity'
 import type { PurchaseDocument, PurchaseProcess, TransitionAction } from '../types/purchase'
 
 export interface PurchaseProcessCreateInput {
@@ -26,7 +27,10 @@ export interface AvailabilityCheckInput {
 }
 
 export const purchasesApi = {
-  list: (projectId: number) => api.get<PurchaseProcess[]>(`/projects/${projectId}/purchase-processes`),
+  list: (projectId: number, filters?: { positionId?: number }) => {
+    const query = filters?.positionId !== undefined ? `?position_id=${filters.positionId}` : ''
+    return api.get<PurchaseProcess[]>(`/projects/${projectId}/purchase-processes${query}`)
+  },
   checkAvailability: (projectId: number, body: AvailabilityCheckInput) =>
     api.post<{ available: boolean }>(`/projects/${projectId}/purchase-processes/check-availability`, body),
   get: (projectId: number, processId: number) =>
@@ -55,9 +59,19 @@ export const purchasesApi = {
     form.append('file', file)
 
     const token = getCoordenadorToken()
+    const devIdentity = import.meta.env.DEV ? getDevIdentity() : null
     const resp = await fetch(
       `${API_BASE}/projects/${projectId}/purchase-processes/${processId}/documents`,
-      { method: 'POST', body: form, headers: token ? { 'X-Horun-Coordenador-Token': token } : undefined },
+      {
+        method: 'POST',
+        body: form,
+        headers: {
+          ...(token ? { 'X-Horun-Coordenador-Token': token } : {}),
+          ...(devIdentity
+            ? { 'X-Horun-User-Id': devIdentity.userId, 'X-Horun-User': devIdentity.username, 'X-Horun-Role': 'admin' }
+            : {}),
+        },
+      },
     )
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}))

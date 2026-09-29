@@ -9,11 +9,13 @@ interface NewPurchaseProcessModalProps {
   projectId: number
   onClose: () => void
   onCreated: () => void
+  /** Quando informado, abre já travado neste item (ex.: modal acionado a partir da própria página do item). */
+  presetPositionId?: number
 }
 
-export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPurchaseProcessModalProps) {
+export function NewPurchaseProcessModal({ projectId, onClose, onCreated, presetPositionId }: NewPurchaseProcessModalProps) {
   const [items, setItems] = useState<ItemBalance[] | null>(null)
-  const [positionId, setPositionId] = useState<number | null>(null)
+  const [positionId, setPositionId] = useState<number | null>(presetPositionId ?? null)
   const [title, setTitle] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [unitValue, setUnitValue] = useState('')
@@ -88,9 +90,10 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
           Item de orçamento
         </label>
         <select
-          className="mb-3 w-full rounded-md border px-3 py-2 text-sm"
+          className="mb-3 w-full rounded-md border px-3 py-2 text-sm disabled:opacity-70"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           value={positionId ?? ''}
+          disabled={presetPositionId !== undefined}
           onChange={(e) => updateAndResetCheck(setPositionId, e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">Selecione um item…</option>
