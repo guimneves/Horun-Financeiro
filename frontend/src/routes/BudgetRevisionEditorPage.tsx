@@ -15,7 +15,14 @@ export function BudgetRevisionEditorPage() {
   const [categories, setCategories] = useState<Category[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activating, setActivating] = useState(false)
-  const [newItem, setNewItem] = useState<{ category: string; itemNumber: string; description: string; unitValue: string; quantity: string } | null>(null)
+  const [newItem, setNewItem] = useState<{
+    category: string
+    itemNumber: string
+    description: string
+    unitValue: string
+    quantity: string
+    coppetecProcessNumber: string
+  } | null>(null)
 
   const load = useCallback(() => {
     if (!revisionId) return
@@ -58,6 +65,7 @@ export function BudgetRevisionEditorPage() {
       description: newItem.description,
       unit_value: newItem.unitValue,
       planned_quantity: newItem.quantity,
+      coppetec_process_number: newItem.coppetecProcessNumber || undefined,
     })
     setNewItem(null)
     load()
@@ -128,7 +136,14 @@ export function BudgetRevisionEditorPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    setNewItem({ category: category.code, itemNumber: '', description: '', unitValue: '', quantity: '' })
+                    setNewItem({
+                      category: category.code,
+                      itemNumber: '',
+                      description: '',
+                      unitValue: '',
+                      quantity: '',
+                      coppetecProcessNumber: '',
+                    })
                   }
                   className="text-xs"
                   style={{ color: 'var(--color-primary)' }}
@@ -146,6 +161,7 @@ export function BudgetRevisionEditorPage() {
                     <th className="px-3 py-2 text-right font-medium">V. Unit.</th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
                     <th className="px-3 py-2 text-right font-medium">Valor</th>
+                    <th className="px-3 py-2 text-left font-medium">Nº processo COPPETEC</th>
                     {editable && <th className="px-3 py-2"></th>}
                   </tr>
                 </thead>
@@ -199,6 +215,15 @@ export function BudgetRevisionEditorPage() {
                         />
                       </td>
                       <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-28 rounded border px-2 py-1"
+                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                          placeholder="Nº processo"
+                          value={newItem.coppetecProcessNumber}
+                          onChange={(e) => setNewItem({ ...newItem, coppetecProcessNumber: e.target.value })}
+                        />
+                      </td>
                       <td className="px-2 py-1 text-right">
                         <button type="button" onClick={handleAddItem} style={{ color: 'var(--color-primary)' }}>
                           salvar

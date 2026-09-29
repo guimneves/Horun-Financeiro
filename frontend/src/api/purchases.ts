@@ -19,8 +19,16 @@ export interface TransitionInput {
   final_value?: string
 }
 
+export interface AvailabilityCheckInput {
+  budget_position_id: number
+  quantity: string
+  estimated_unit_value: string
+}
+
 export const purchasesApi = {
   list: (projectId: number) => api.get<PurchaseProcess[]>(`/projects/${projectId}/purchase-processes`),
+  checkAvailability: (projectId: number, body: AvailabilityCheckInput) =>
+    api.post<{ available: boolean }>(`/projects/${projectId}/purchase-processes/check-availability`, body),
   get: (projectId: number, processId: number) =>
     api.get<PurchaseProcess>(`/projects/${projectId}/purchase-processes/${processId}`),
   create: (projectId: number, body: PurchaseProcessCreateInput) =>

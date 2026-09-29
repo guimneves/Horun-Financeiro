@@ -18,6 +18,7 @@ export function EditableItemRow({ projectId, revisionId, item, editable, onChang
   // coordenador, então na prática nunca é null aqui.
   const [unitValue, setUnitValue] = useState(item.unit_value ?? '')
   const [plannedQuantity, setPlannedQuantity] = useState(item.planned_quantity)
+  const [coppetecProcessNumber, setCoppetecProcessNumber] = useState(item.coppetec_process_number ?? '')
 
   async function save(patch: Record<string, string>) {
     await budgetApi.updateItem(projectId, revisionId, item.id, patch)
@@ -44,6 +45,9 @@ export function EditableItemRow({ projectId, revisionId, item, editable, onChang
         <td className="px-3 py-2 text-right">{item.planned_quantity}</td>
         <td className="px-3 py-2 text-right">
           <MoneyValue value={item.planned_value} />
+        </td>
+        <td className="px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>
+          {item.coppetec_process_number ?? '—'}
         </td>
       </tr>
     )
@@ -85,6 +89,19 @@ export function EditableItemRow({ projectId, revisionId, item, editable, onChang
       </td>
       <td className="px-3 py-2 text-right">
         <MoneyValue value={item.planned_value} />
+      </td>
+      <td className="px-3 py-2">
+        <input
+          className="w-28 rounded border px-2 py-1"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          value={coppetecProcessNumber}
+          placeholder="Nº processo"
+          onChange={(e) => setCoppetecProcessNumber(e.target.value)}
+          onBlur={() =>
+            coppetecProcessNumber !== (item.coppetec_process_number ?? '') &&
+            save({ coppetec_process_number: coppetecProcessNumber })
+          }
+        />
       </td>
       <td className="px-3 py-2 text-right">
         <button type="button" onClick={handleDelete} className="text-xs" style={{ color: '#b91c1c' }}>

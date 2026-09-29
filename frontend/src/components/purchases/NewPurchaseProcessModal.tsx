@@ -19,6 +19,8 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
   const [unitValue, setUnitValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [availability, setAvailability] = useState<boolean | null>(null)
 
   useEffect(() => {
     budgetApi.balance(projectId).then(setItems).catch((err) => setError(err.message))
@@ -27,6 +29,31 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
   const selected = items?.find((i) => i.position_id === positionId) ?? null
   const estimatedValue = (Number(quantity) || 0) * (Number(unitValue) || 0)
   const exceedsBalance = selected !== null && selected.balance !== null && estimatedValue > Number(selected.balance)
+
+  // Qualquer mudança no que está sendo checado invalida o resultado
+  // anterior — nunca mostrar uma resposta de "disponível" desatualizada.
+  function updateAndResetCheck<T>(setter: (value: T) => void, value: T) {
+    setter(value)
+    setAvailability(null)
+  }
+
+  async function handleCheckAvailability() {
+    if (positionId === null || !unitValue) return
+    setChecking(true)
+    setError(null)
+    try {
+      const result = await purchasesApi.checkAvailability(projectId, {
+        budget_position_id: positionId,
+        quantity,
+        estimated_unit_value: unitValue,
+      })
+      setAvailability(result.available)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao verificar disponibilidade.')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   async function handleSubmit() {
     if (positionId === null || !title.trim()) return
@@ -64,7 +91,7 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
           className="mb-3 w-full rounded-md border px-3 py-2 text-sm"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           value={positionId ?? ''}
-          onChange={(e) => setPositionId(e.target.value ? Number(e.target.value) : null)}
+          onChange={(e) => updateAndResetCheck(setPositionId, e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">Selecione um item…</option>
           {items?.map((item) => (
@@ -107,7 +134,7 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
               className="w-full rounded-md border px-3 py-2 text-sm"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onChange={(e) => updateAndResetCheck(setQuantity, e.target.value)}
             />
           </div>
           <div>
@@ -119,9 +146,31 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
               className="w-full rounded-md border px-3 py-2 text-sm"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
               value={unitValue}
-              onChange={(e) => setUnitValue(e.target.value)}
+              onChange={(e) => updateAndResetCheck(setUnitValue, e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCheckAvailability}
+            disabled={checking || positionId === null || !unitValue}
+            className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}
+          >
+            {checking ? 'Verificando…' : 'Verificar disponibilidade'}
+          </button>
+          {availability !== null &&
+            (availability ? (
+              <span className="text-sm" style={{ color: 'var(--color-primary)' }}>
+                ✓ Há valor disponível para esta compra.
+              </span>
+            ) : (
+              <span className="text-sm" style={{ color: '#b91c1c' }}>
+                ✗ Não há valor disponível para esta compra.
+              </span>
+            ))}
         </div>
 
         {exceedsBalance && (

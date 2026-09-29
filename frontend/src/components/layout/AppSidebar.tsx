@@ -1,17 +1,18 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useProjects } from '../../context/ProjectsContext'
 
-const PROJECT_NAV_ITEMS = [
+const COORDENADOR_NAV_ITEMS = [
   { to: '', label: 'Resumo' },
   { to: 'budget', label: 'Orçamento' },
   { to: 'purchases', label: 'Compras' },
   { to: 'personnel', label: 'Equipe' },
-]
-
-const COORDENADOR_NAV_ITEMS = [
   { to: 'revisions', label: 'Revisões' },
   { to: 'members', label: 'Membros' },
 ]
+
+// Operador comum (colaborador) só enxerga Compras — o resto fica oculto
+// mesmo pra quem sabe a URL (ProjectLayout redireciona de qualquer jeito).
+const OPERADOR_NAV_ITEMS = [{ to: 'purchases', label: 'Compras' }]
 
 export function AppSidebar() {
   const { projects, error } = useProjects()
@@ -43,10 +44,12 @@ export function AppSidebar() {
       <nav className="flex flex-col gap-0.5">
         {projects?.map((project) => {
           const isCurrent = project.id === currentProjectId
+          const isCoordenador = project.my_role === 'coordenador'
+          const navItems = isCoordenador ? COORDENADOR_NAV_ITEMS : OPERADOR_NAV_ITEMS
           return (
             <div key={project.id}>
               <Link
-                to={`/projects/${project.id}`}
+                to={`/projects/${project.id}${isCoordenador ? '' : '/purchases'}`}
                 className="block truncate rounded-md px-2 py-1.5 text-sm"
                 style={{
                   background: isCurrent ? 'var(--color-surface)' : 'transparent',
@@ -63,7 +66,7 @@ export function AppSidebar() {
                   className="ml-2 mt-0.5 mb-2 flex flex-col gap-0.5 border-l pl-2"
                   style={{ borderColor: 'var(--color-border)' }}
                 >
-                  {[...PROJECT_NAV_ITEMS, ...(project.my_role === 'coordenador' ? COORDENADOR_NAV_ITEMS : [])].map(
+                  {navItems.map(
                     (item) => {
                       const to = `/projects/${project.id}${item.to ? `/${item.to}` : ''}`
                       const isActive = item.to === '' ? location.pathname === to : location.pathname.startsWith(to)

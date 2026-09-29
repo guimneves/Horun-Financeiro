@@ -15,6 +15,7 @@ export interface BudgetItemCreateInput {
   unit_value: string
   planned_quantity: string
   note?: string
+  coppetec_process_number?: string
 }
 
 export interface BudgetItemUpdateInput {
@@ -23,6 +24,7 @@ export interface BudgetItemUpdateInput {
   unit_value?: string
   planned_quantity?: string
   note?: string
+  coppetec_process_number?: string
 }
 
 export const budgetApi = {

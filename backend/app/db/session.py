@@ -45,11 +45,7 @@ def _ensure_column(table: str, column: str, ddl_type: str) -> None:
 
 
 def _run_migrations() -> None:
-    # Nenhuma coluna pós-lançamento ainda — primeira versão do módulo.
-    # Ao adicionar um campo num modelo que já tem tabela em produção, somar
-    # aqui uma chamada de _ensure_column (mesmo padrão do Core), no mesmo
-    # commit que muda o modelo.
-    pass
+    _ensure_column("budgetitem", "coppetec_process_number", "VARCHAR")
 
 
 def _ensure_module_settings() -> None:

@@ -38,6 +38,7 @@ class BudgetItemCreate(BaseModel):
     unit_value: Decimal
     planned_quantity: Decimal
     note: str = ""
+    coppetec_process_number: str | None = None
 
 
 class BudgetItemUpdate(BaseModel):
@@ -46,6 +47,7 @@ class BudgetItemUpdate(BaseModel):
     unit_value: Decimal | None = None
     planned_quantity: Decimal | None = None
     note: str | None = None
+    coppetec_process_number: str | None = None
 
 
 class YieldUpdate(BaseModel):
@@ -67,6 +69,7 @@ class BudgetItemOut(BaseModel):
     planned_value: Decimal | None
     yield_amount: Decimal | None
     note: str
+    coppetec_process_number: str | None
 
 
 class ItemBalanceOut(BaseModel):
@@ -83,6 +86,7 @@ class ItemBalanceOut(BaseModel):
     executed: Decimal | None
     balance: Decimal | None
     has_balance: bool
+    coppetec_process_number: str | None
 
 
 class CategorySummaryOut(BaseModel):

@@ -48,6 +48,7 @@ def _item_out(item: BudgetItem, position: BudgetPosition, *, visible: bool) -> B
         planned_value=money(item.planned_value, visible=visible),
         yield_amount=money(item.yield_amount, visible=visible),
         note=item.note,
+        coppetec_process_number=item.coppetec_process_number,
     )
 
 
@@ -223,6 +224,7 @@ def create_item(
         planned_quantity=body.planned_quantity,
         planned_value=planned_value,
         note=body.note,
+        coppetec_process_number=body.coppetec_process_number,
     )
     session.add(item)
     session.commit()
@@ -345,6 +347,7 @@ def get_balance(
             executed=money(r.executed, visible=visible),
             balance=money(r.balance, visible=visible),
             has_balance=r.balance > 0,
+            coppetec_process_number=r.coppetec_process_number,
         )
         for r in rows
     ]

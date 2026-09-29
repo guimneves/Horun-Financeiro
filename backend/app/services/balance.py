@@ -39,6 +39,7 @@ class ItemBalance:
     committed: Decimal
     executed: Decimal
     balance: Decimal
+    coppetec_process_number: str | None
 
 
 def _committed_and_executed_from(
@@ -120,10 +121,24 @@ def item_balances(session: Session, revision_id: int, category: str | None = Non
                 committed=committed,
                 executed=executed,
                 balance=balance,
+                coppetec_process_number=item.coppetec_process_number,
             )
         )
     results.sort(key=lambda r: (r.category, r.item_number))
     return results
+
+
+def position_balance(session: Session, project_id: int, position_id: int) -> ItemBalance | None:
+    """Saldo de UMA posição na revisão ativa do projeto — usado pelo
+    "verificar disponibilidade" (routes_purchases.py), que precisa do
+    saldo real sem devolvê-lo pra quem não é coordenador."""
+    from app.db.models.project import Project
+
+    project = session.get(Project, project_id)
+    if project is None or project.active_revision_id is None:
+        return None
+    rows = item_balances(session, project.active_revision_id)
+    return next((r for r in rows if r.position_id == position_id), None)
 
 
 @dataclass

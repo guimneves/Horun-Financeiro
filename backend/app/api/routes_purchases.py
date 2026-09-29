@@ -18,12 +18,15 @@ from app.db.models.project import ProjectMembership
 from app.db.models.purchase import PRE_AUTHORIZATION_STATES, TERMINAL_STATES, PurchaseProcess
 from app.db.session import get_session
 from app.schemas.purchase import (
+    AvailabilityCheckOut,
+    AvailabilityCheckRequest,
     DocumentOut,
     PurchaseProcessCreate,
     PurchaseProcessOut,
     PurchaseProcessUpdate,
     TransitionRequest,
 )
+from app.services.balance import position_balance
 from app.services.transitions import TransitionError, apply_transition
 
 router = APIRouter(prefix="/projects/{project_id}/purchase-processes", tags=["purchases"])
@@ -133,6 +136,28 @@ def create_process(
     session.commit()
     session.refresh(process)
     return _process_out(process, visible=membership.role == "coordenador")
+
+
+@router.post("/check-availability", response_model=AvailabilityCheckOut)
+def check_availability(
+    project_id: int,
+    body: AvailabilityCheckRequest,
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(get_membership),
+):
+    """Responde só sim/não — nunca o saldo real, mesmo pra quem não é
+    coordenador (ver core/redaction.py). É o que deixa o operador comum
+    conferir se um valor cabe no orçamento sem nunca ver o número."""
+    position = session.get(BudgetPosition, body.budget_position_id)
+    if position is None or position.project_id != project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item de orçamento não encontrado.")
+
+    balance = position_balance(session, project_id, body.budget_position_id)
+    if balance is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Projeto não tem revisão orçamentária ativa.")
+
+    estimated = body.quantity * body.estimated_unit_value
+    return AvailabilityCheckOut(available=(balance.balance - estimated) >= 0)
 
 
 @router.get("/{process_id}", response_model=PurchaseProcessOut)

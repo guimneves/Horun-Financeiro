@@ -48,6 +48,16 @@ class PurchaseProcessOut(BaseModel):
     closed_at: datetime | None
 
 
+class AvailabilityCheckRequest(BaseModel):
+    budget_position_id: int
+    quantity: Decimal
+    estimated_unit_value: Decimal
+
+
+class AvailabilityCheckOut(BaseModel):
+    available: bool
+
+
 class TransitionRequest(BaseModel):
     action: str
     reason: str | None = None

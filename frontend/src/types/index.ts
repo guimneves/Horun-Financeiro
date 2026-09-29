@@ -43,6 +43,7 @@ export interface BudgetItem {
   planned_value: string | null
   yield_amount: string | null
   note: string
+  coppetec_process_number: string | null
 }
 
 export interface ItemBalance {
@@ -59,6 +60,7 @@ export interface ItemBalance {
   executed: string | null
   balance: string | null
   has_balance: boolean
+  coppetec_process_number: string | null
 }
 
 export interface CategorySummary {
