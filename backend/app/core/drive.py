@@ -40,18 +40,36 @@ def drive_root() -> Path:
 
 
 def safe_join(base: Path, relative: str) -> Path:
-    """`base / relative`, garantindo que o resultado continua dentro de `base`."""
+    """`base / relative`, garantindo que o resultado continua dentro de `base`.
+
+    O `:` é recusado em QUALQUER segmento, não só no primeiro: no Windows,
+    `base.joinpath("pasta", "D:", "x")` troca de unidade e sai da base
+    (`D:x`). Depois do join, uma conferência final por `commonpath` cobre o
+    que a checagem por segmento não previr."""
     rel = relative.replace("\\", "/").strip("/")
     if rel == "":
         return base
-    parts = posixpath.normpath(rel).split("/")
-    if rel.startswith("/") or ":" in parts[0] or any(p == ".." for p in parts):
+    if "\x00" in rel:
         raise DriveError("Caminho inválido.")
-    return base.joinpath(*parts)
+    parts = posixpath.normpath(rel).split("/")
+    if any(p == ".." or ":" in p for p in parts):
+        raise DriveError("Caminho inválido.")
+    result = base.joinpath(*parts)
+    base_abs = os.path.abspath(base)
+    if os.path.commonpath([base_abs, os.path.abspath(result)]) != base_abs:
+        raise DriveError("Caminho inválido.")
+    return result
 
 
 def resolve_drive_folder(drive_folder: str) -> Path:
-    """Valida e resolve uma pasta de projeto (relativa à raiz do drive)."""
+    """Valida e resolve uma pasta de projeto (relativa à raiz do drive).
+
+    A pasta tem que ser uma subpasta de verdade: `.`/vazio apontariam o
+    projeto pra raiz do drive inteiro, e os membros desse projeto passariam
+    a navegar nos documentos de todos os outros."""
+    normalized = posixpath.normpath(drive_folder.replace("\\", "/").strip("/")) if drive_folder.strip() else ""
+    if normalized in ("", "."):
+        raise DriveError("Informe uma subpasta do drive, não a raiz.")
     folder = safe_join(drive_root(), drive_folder)
     if not os.path.isdir(fs_path(folder)):
         raise DriveError(f"A pasta do projeto não existe no drive: {drive_folder}")
