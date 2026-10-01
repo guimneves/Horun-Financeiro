@@ -87,4 +87,8 @@ class BudgetItem(SQLModel, table=True):
     planned_value: Decimal = Field(sa_column=Column(Numeric(14, 2)))  # Valor (R$) = unit_value * planned_quantity
     yield_amount: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(14, 2)))  # Rendimentos
     note: str = ""  # ex. valor original em moeda estrangeira
+    # Referência de planejamento (ex. processo de formulação/reformulação
+    # do orçamento) — diferente do process_number do PurchaseProcess, que
+    # é o número emitido durante o fluxo de autorização de UMA compra.
+    coppetec_process_number: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)

@@ -1,8 +1,11 @@
 import type { CategorySummary } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
+import { AvailabilityBadge } from '../common/AvailabilityBadge'
 
 export function CategorySummaryCard({ summary }: { summary: CategorySummary }) {
-  const hasValue = Number(summary.planned_value) !== 0
+  // planned_value vem null pra quem não pode ver valores (ver core/redaction.py no backend) —
+  // sem o número, não dá pra saber se a categoria está vazia, então não esmaece o card.
+  const hasValue = summary.planned_value === null ? true : Number(summary.planned_value) !== 0
   return (
     <div
       className="rounded-lg border p-4"
@@ -32,7 +35,11 @@ export function CategorySummaryCard({ summary }: { summary: CategorySummary }) {
           Saldo
         </dt>
         <dd className="text-right">
-          <MoneyValue value={summary.balance} signColored />
+          {summary.balance === null ? (
+            <AvailabilityBadge hasBalance={summary.has_balance} />
+          ) : (
+            <MoneyValue value={summary.balance} signColored />
+          )}
         </dd>
       </dl>
     </div>

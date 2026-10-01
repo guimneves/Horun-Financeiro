@@ -10,15 +10,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import (
+    routes_auth,
     routes_budget,
     routes_categories,
     routes_drive,
     routes_funding,
+    routes_known_users,
     routes_personnel,
     routes_projects,
     routes_purchases,
 )
+from app.core.config import check_production_settings
 from app.core.identity import DEV_MODE
+from app.core.known_users_middleware import KnownUsersMiddleware
 from app.db.session import create_db_and_tables
 
 
@@ -29,6 +33,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "HORUN_DEV_MODE=true: toda requisição é tratada como o usuário 'admin', SEM login. "
             "Use só em desenvolvimento e nunca exponha esta porta na rede."
         )
+    check_production_settings(DEV_MODE)
     create_db_and_tables()
     yield
 
@@ -73,6 +78,11 @@ async def _validation_error_pt(_request: Request, exc: RequestValidationError) -
         messages.append(f"{label}: {text}.")
     return JSONResponse(status_code=422, content={"detail": " ".join(messages) or "Dados inválidos."})
 
+# Registra quem já apareceu numa requisição (ver core/known_users_middleware.py)
+# — precisa vir antes do CORS na ordem de registro pra ficar na camada
+# interna da pilha (CORS por fora, cobrindo toda resposta, inclusive erro).
+app.add_middleware(KnownUsersMiddleware)
+
 if DEV_MODE:
     # Só em desenvolvimento standalone: o frontend (Vite, porta 5173) e o
     # backend (porta 8000) são origens diferentes pro navegador. Em
@@ -90,6 +100,7 @@ if DEV_MODE:
 # frontend (Prompt_Horun_Modulo.md, seção 6). Sem o prefixo, a SPA recebia
 # index.html no lugar do JSON. `/health` fica fora, na raiz (contrato).
 API_ROUTERS = (
+    routes_auth.router,
     routes_projects.router,
     routes_categories.router,
     routes_budget.router,
@@ -97,6 +108,7 @@ API_ROUTERS = (
     routes_personnel.router,
     routes_funding.router,
     routes_drive.router,
+    routes_known_users.router,
 )
 for _router in API_ROUTERS:
     app.include_router(_router, prefix="/api")

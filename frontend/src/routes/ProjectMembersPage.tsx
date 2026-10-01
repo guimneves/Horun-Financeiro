@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { projectsApi, type Membership } from '../api/projects'
+import { knownUsersApi, type KnownUser } from '../api/knownUsers'
 import { StatusBadge } from '../components/common/StatusBadge'
 import type { ProjectContext } from './ProjectLayout'
+
+const MANUAL_OPTION = '__manual__'
 
 export function ProjectMembersPage() {
   const { project } = useOutletContext<ProjectContext>()
   const [members, setMembers] = useState<Membership[] | null>(null)
+  const [knownUsers, setKnownUsers] = useState<KnownUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [userId, setUserId] = useState('')
-  const [username, setUsername] = useState('')
+
+  const [selection, setSelection] = useState('')
+  const [manualUserId, setManualUserId] = useState('')
+  const [manualUsername, setManualUsername] = useState('')
   const [role, setRole] = useState<'coordenador' | 'colaborador'>('colaborador')
   const [submitting, setSubmitting] = useState(false)
 
@@ -18,20 +24,31 @@ export function ProjectMembersPage() {
       .members(project.id)
       .then(setMembers)
       .catch((err) => setError(err.message))
+    knownUsersApi.list().then(setKnownUsers) // se falhar, cai no cadastro manual — não bloqueia a tela
   }, [project.id])
 
   useEffect(() => {
     load()
   }, [load])
 
+  const memberIds = new Set((members ?? []).map((m) => m.user_id))
+  const availableKnownUsers = (knownUsers ?? []).filter((u) => !memberIds.has(u.user_id))
+  const isManual = selection === MANUAL_OPTION
+
   async function handleAdd() {
-    if (!userId.trim() || !username.trim()) return
+    const userId = isManual ? manualUserId.trim() : selection
+    const username = isManual
+      ? manualUsername.trim()
+      : (availableKnownUsers.find((u) => u.user_id === selection)?.username ?? '')
+    if (!userId || !username) return
+
     setSubmitting(true)
     setError(null)
     try {
-      await projectsApi.addMember(project.id, { user_id: userId.trim(), username: username.trim(), role })
-      setUserId('')
-      setUsername('')
+      await projectsApi.addMember(project.id, { user_id: userId, username, role })
+      setSelection('')
+      setManualUserId('')
+      setManualUsername('')
       setRole('colaborador')
       load()
     } catch (err) {
@@ -60,26 +77,54 @@ export function ProjectMembersPage() {
       >
         <div>
           <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
-            ID do usuário (X-Horun-User-Id do Core)
+            Pessoa
           </label>
-          <input
+          <select
             className="rounded-md border px-3 py-1.5 text-sm"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-          />
+            value={selection}
+            onChange={(e) => setSelection(e.target.value)}
+          >
+            <option value="">Selecione…</option>
+            {availableKnownUsers.map((u) => (
+              <option key={u.user_id} value={u.user_id}>
+                {u.username} ({u.user_id})
+              </option>
+            ))}
+            <option value={MANUAL_OPTION}>+ Digitar manualmente…</option>
+          </select>
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Só aparecem aqui pessoas que já acessaram o Horun · Financeiro pelo menos uma vez.
+          </p>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
-            Nome de exibição
-          </label>
-          <input
-            className="rounded-md border px-3 py-1.5 text-sm"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-        </div>
+
+        {isManual && (
+          <>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                ID do usuário (X-Horun-User-Id do Core)
+              </label>
+              <input
+                className="rounded-md border px-3 py-1.5 text-sm"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                value={manualUserId}
+                onChange={(e) => setManualUserId(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                Nome de exibição
+              </label>
+              <input
+                className="rounded-md border px-3 py-1.5 text-sm"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                value={manualUsername}
+                onChange={(e) => setManualUsername(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
         <div>
           <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
             Papel
@@ -97,7 +142,7 @@ export function ProjectMembersPage() {
         <button
           type="button"
           onClick={handleAdd}
-          disabled={submitting}
+          disabled={submitting || !selection}
           className="rounded-md px-4 py-1.5 text-sm font-medium disabled:opacity-50"
           style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
         >

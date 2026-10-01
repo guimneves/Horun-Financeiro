@@ -1,3 +1,6 @@
+import { getCoordenadorToken } from '../lib/coordenadorSession'
+import { getDevIdentity } from '../lib/devIdentity'
+
 // Em produção (plugado no Core), tudo roda na mesma origem sob o prefixo
 // /m/<id>/ — a identidade chega ao backend via cabeçalho injetado pelo
 // gateway, nunca pelo frontend (Prompt_Horun_Modulo.md, seção 6). Em
@@ -17,10 +20,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const coordenadorToken = getCoordenadorToken()
+  const devIdentity = import.meta.env.DEV ? getDevIdentity() : null
   const resp = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(coordenadorToken ? { 'X-Horun-Coordenador-Token': coordenadorToken } : {}),
+      ...(devIdentity
+        ? { 'X-Horun-User-Id': devIdentity.userId, 'X-Horun-User': devIdentity.username, 'X-Horun-Role': 'admin' }
+        : {}),
       ...init?.headers,
     },
   })

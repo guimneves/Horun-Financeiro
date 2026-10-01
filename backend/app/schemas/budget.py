@@ -40,6 +40,7 @@ class BudgetItemCreate(BaseModel):
     unit_value: Money
     planned_quantity: NonNegativeQuantity
     note: str = ""
+    coppetec_process_number: str | None = None
 
 
 class BudgetItemUpdate(BaseModel):
@@ -48,6 +49,7 @@ class BudgetItemUpdate(BaseModel):
     unit_value: Money | None = None
     planned_quantity: NonNegativeQuantity | None = None
     note: str | None = None
+    coppetec_process_number: str | None = None
 
     _not_null = field_validator("description", "justification", "unit_value", "planned_quantity", "note")(reject_null)
 
@@ -64,11 +66,14 @@ class BudgetItemOut(BaseModel):
     item_number: int
     description: str
     justification: str
-    unit_value: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py. Colaborador
+    # só sabe se há saldo (has_balance no ItemBalanceOut), não os valores.
+    unit_value: Decimal | None
     planned_quantity: Decimal
-    planned_value: Decimal
-    yield_amount: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
     note: str
+    coppetec_process_number: str | None
 
 
 class ItemBalanceOut(BaseModel):
@@ -77,13 +82,15 @@ class ItemBalanceOut(BaseModel):
     item_number: int
     description: str
     justification: str
-    unit_value: Decimal
+    unit_value: Decimal | None
     planned_quantity: Decimal
-    planned_value: Decimal
-    yield_amount: Decimal
-    committed: Decimal
-    executed: Decimal
-    balance: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
+    committed: Decimal | None
+    executed: Decimal | None
+    balance: Decimal | None
+    has_balance: bool
+    coppetec_process_number: str | None
     available_quantity: Decimal | None = None
 
 
@@ -91,8 +98,9 @@ class CategorySummaryOut(BaseModel):
     category: str
     label: str
     group: str
-    planned_value: Decimal
-    yield_amount: Decimal
-    committed: Decimal
-    executed: Decimal
-    balance: Decimal
+    planned_value: Decimal | None
+    yield_amount: Decimal | None
+    committed: Decimal | None
+    executed: Decimal | None
+    balance: Decimal | None
+    has_balance: bool

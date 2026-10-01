@@ -43,13 +43,14 @@ class AssignmentOut(BaseModel):
     person_name: str
     budget_position_id: int
     role_title: str
-    monthly_rate: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py.
+    monthly_rate: Decimal | None
     start_date: date
     end_date: date | None
     status: str
     accrued_months: Decimal
-    accrued_value: Decimal
-    committed_future_value: Decimal
+    accrued_value: Decimal | None
+    committed_future_value: Decimal | None
 
 
 class CloseAssignmentRequest(BaseModel):

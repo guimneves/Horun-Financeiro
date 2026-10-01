@@ -38,8 +38,9 @@ class PurchaseProcessOut(BaseModel):
     title: str
     vendor: str | None
     quantity: Decimal
-    estimated_unit_value: Decimal
-    estimated_value: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py.
+    estimated_unit_value: Decimal | None
+    estimated_value: Decimal | None
     final_value: Decimal | None
     asset_registration_flag: bool
     status: str
@@ -55,6 +56,16 @@ class PurchaseProcessOut(BaseModel):
     # Avisos que não impedem a operação (ex.: valor acima do saldo num projeto
     # com política "avisar"). Só vem preenchido na resposta de criar/editar.
     warnings: list[str] = []
+
+
+class AvailabilityCheckRequest(BaseModel):
+    budget_position_id: int
+    quantity: PositiveQuantity
+    estimated_unit_value: Money
+
+
+class AvailabilityCheckOut(BaseModel):
+    available: bool
 
 
 class TransitionRequest(BaseModel):

@@ -9,6 +9,9 @@ import os
 import tempfile
 
 os.environ["HORUN_DEV_MODE"] = "false"
+# Fora do DEV_MODE não há valores padrão para segredos (core/config.py).
+os.environ.setdefault("MODULE_SECRET_KEY", "chave-so-dos-testes-" + "x" * 32)
+os.environ.setdefault("MODULE_COORDENADOR_PASSWORD", "senha-dos-testes")
 _db_fd, _db_path = tempfile.mkstemp(suffix=".db")
 os.close(_db_fd)
 os.environ["MODULE_DATABASE_URL"] = f"sqlite:///{_db_path}"
@@ -20,6 +23,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402
 
+from app.api.routes_auth import _failed_attempts  # noqa: E402
 from app.db.session import create_db_and_tables, engine  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -32,6 +36,7 @@ OUTSIDER = {"X-Horun-User-Id": "u-outsider", "X-Horun-User": "outsider", "X-Horu
 def _fresh_db():
     SQLModel.metadata.drop_all(engine)
     create_db_and_tables()
+    _failed_attempts.clear()  # contador de tentativas de senha é global
     yield
 
 

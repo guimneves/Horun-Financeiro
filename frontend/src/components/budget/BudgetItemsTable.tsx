@@ -1,7 +1,17 @@
+import { Link } from 'react-router-dom'
 import type { ItemBalance } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
+import { AvailabilityBadge } from '../common/AvailabilityBadge'
 
-export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[]; categoryLabel: string }) {
+export function BudgetItemsTable({
+  items,
+  categoryLabel,
+  projectId,
+}: {
+  items: ItemBalance[]
+  categoryLabel: string
+  projectId: number
+}) {
   if (items.length === 0) return null
 
   return (
@@ -31,8 +41,14 @@ export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[
                 <td className="px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>
                   {item.item_number}
                 </td>
-                <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>
-                  {item.description}
+                <td className="px-3 py-2">
+                  <Link
+                    to={`/projects/${projectId}/budget/items/${item.position_id}`}
+                    style={{ color: 'var(--color-text)' }}
+                    className="hover:underline"
+                  >
+                    {item.description}
+                  </Link>
                 </td>
                 <td
                   className="px-3 py-2 text-right"
@@ -58,7 +74,11 @@ export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[
                   <MoneyValue value={item.executed} />
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <MoneyValue value={item.balance} signColored />
+                  {item.balance === null ? (
+                    <AvailabilityBadge hasBalance={item.has_balance} />
+                  ) : (
+                    <MoneyValue value={item.balance} signColored />
+                  )}
                 </td>
               </tr>
             ))}

@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 
 from app.core.money import round_money
 from app.core.permissions import get_membership, require_coordenador
+from app.core.redaction import money
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition, BudgetRevision
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
@@ -34,7 +35,7 @@ from app.services.balance import category_summary, item_balances
 router = APIRouter(prefix="/projects/{project_id}", tags=["budget"])
 
 
-def _item_out(item: BudgetItem, position: BudgetPosition) -> BudgetItemOut:
+def _item_out(item: BudgetItem, position: BudgetPosition, *, visible: bool) -> BudgetItemOut:
     return BudgetItemOut(
         id=item.id,
         revision_id=item.revision_id,
@@ -43,11 +44,12 @@ def _item_out(item: BudgetItem, position: BudgetPosition) -> BudgetItemOut:
         item_number=position.item_number,
         description=item.description,
         justification=item.justification,
-        unit_value=item.unit_value,
+        unit_value=money(item.unit_value, visible=visible),
         planned_quantity=item.planned_quantity,
-        planned_value=item.planned_value,
-        yield_amount=item.yield_amount,
+        planned_value=money(item.planned_value, visible=visible),
+        yield_amount=money(item.yield_amount, visible=visible),
         note=item.note,
+        coppetec_process_number=item.coppetec_process_number,
     )
 
 
@@ -172,7 +174,7 @@ def list_items(
     revision_id: int,
     category: str | None = None,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     _get_revision(session, project_id, revision_id)
     query = (
@@ -182,7 +184,8 @@ def list_items(
     )
     if category is not None:
         query = query.where(BudgetPosition.category == category)
-    return [_item_out(item, position) for item, position in session.exec(query)]
+    visible = membership.role == "coordenador"
+    return [_item_out(item, position, visible=visible) for item, position in session.exec(query)]
 
 
 @router.post("/revisions/{revision_id}/items", response_model=BudgetItemOut, status_code=status.HTTP_201_CREATED)
@@ -222,11 +225,12 @@ def create_item(
         planned_quantity=body.planned_quantity,
         planned_value=planned_value,
         note=body.note,
+        coppetec_process_number=body.coppetec_process_number,
     )
     session.add(item)
     session.commit()
     session.refresh(item)
-    return _item_out(item, position)
+    return _item_out(item, position, visible=True)  # rota já é coordenador-only
 
 
 @router.patch("/revisions/{revision_id}/items/{item_id}", response_model=BudgetItemOut)
@@ -254,7 +258,7 @@ def update_item(
     session.refresh(item)
 
     position = session.get(BudgetPosition, item.position_id)
-    return _item_out(item, position)
+    return _item_out(item, position, visible=True)  # rota já é coordenador-only
 
 
 @router.delete("/revisions/{revision_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -307,7 +311,7 @@ def update_yield(
     session.add(item)
     session.commit()
     session.refresh(item)
-    return _item_out(item, position)
+    return _item_out(item, position, visible=True)  # rota já é coordenador-only
 
 
 def _require_active_revision(session: Session, project_id: int) -> BudgetRevision:
@@ -324,19 +328,54 @@ def get_balance(
     project_id: int,
     category: str | None = None,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     revision = _require_active_revision(session, project_id)
     rows = item_balances(session, revision.id, category)
-    return [ItemBalanceOut(**vars(r)) for r in rows]
+    visible = membership.role == "coordenador"
+    return [
+        ItemBalanceOut(
+            position_id=r.position_id,
+            category=r.category,
+            item_number=r.item_number,
+            description=r.description,
+            justification=r.justification,
+            unit_value=money(r.unit_value, visible=visible),
+            planned_quantity=r.planned_quantity,
+            planned_value=money(r.planned_value, visible=visible),
+            yield_amount=money(r.yield_amount, visible=visible),
+            committed=money(r.committed, visible=visible),
+            executed=money(r.executed, visible=visible),
+            balance=money(r.balance, visible=visible),
+            has_balance=r.balance > 0,
+            coppetec_process_number=r.coppetec_process_number,
+            # quantidade, não dinheiro — fica visível pra todos
+            available_quantity=r.available_quantity,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/summary", response_model=list[CategorySummaryOut])
 def get_summary(
     project_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     revision = _require_active_revision(session, project_id)
     rows = category_summary(session, revision.id)
-    return [CategorySummaryOut(**vars(r)) for r in rows]
+    visible = membership.role == "coordenador"
+    return [
+        CategorySummaryOut(
+            category=r.category,
+            label=r.label,
+            group=r.group,
+            planned_value=money(r.planned_value, visible=visible),
+            yield_amount=money(r.yield_amount, visible=visible),
+            committed=money(r.committed, visible=visible),
+            executed=money(r.executed, visible=visible),
+            balance=money(r.balance, visible=visible),
+            has_balance=r.balance > 0,
+        )
+        for r in rows
+    ]

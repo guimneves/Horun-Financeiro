@@ -19,12 +19,15 @@ from app.core.identity import HorunIdentity, get_identity
 from app.core.money import round_money
 from app.core.permissions import get_membership
 from app.core.process_number import normalize_process_number
+from app.core.redaction import money
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
 from app.db.models.document import DOC_TYPES, MAX_QUOTES_PER_PROCESS, Document
 from app.db.models.project import Project, ProjectMembership
 from app.db.models.purchase import PRE_AUTHORIZATION_STATES, TERMINAL_STATES, PurchaseProcess
 from app.db.session import get_session
 from app.schemas.purchase import (
+    AvailabilityCheckOut,
+    AvailabilityCheckRequest,
     DocumentOut,
     DocumentTypeUpdate,
     PurchaseProcessCreate,
@@ -34,6 +37,7 @@ from app.schemas.purchase import (
 )
 from app.services.audit import record_event
 from app.services.balance import check_balance
+from app.services.balance import position_balance
 from app.services.transitions import TransitionError, apply_transition
 
 router = APIRouter(prefix="/projects/{project_id}/purchase-processes", tags=["purchases"])
@@ -47,14 +51,20 @@ def _get_process(session: Session, project_id: int, process_id: int) -> Purchase
 
 
 def _balance_warnings(
-    session: Session, project_id: int, position_id: int, additional: Decimal, origin: str = "manual"
+    session: Session,
+    project_id: int,
+    position_id: int,
+    additional: Decimal,
+    origin: str = "manual",
+    *,
+    show_values: bool = True,
 ) -> list[str]:
     """Aplica a política de saldo do projeto: "bloquear" recusa a operação
     (409, com a mensagem pronta para o usuário); "avisar" deixa passar e
     devolve o aviso. Processos vindos do drive (histórico já consumado) nunca
     são bloqueados — só avisados."""
     project = session.get(Project, project_id)
-    message = check_balance(session, project, position_id, additional)
+    message = check_balance(session, project, position_id, additional, show_values=show_values)
     if message is None:
         return []
     if project.balance_policy == "bloquear" and origin != "drive_import":
@@ -62,8 +72,14 @@ def _balance_warnings(
     return [message]
 
 
-def _out(process: PurchaseProcess, warnings: list[str] | None = None) -> PurchaseProcessOut:
+def _out(process: PurchaseProcess, warnings: list[str] | None = None, *, visible: bool) -> PurchaseProcessOut:
+    """`visible=False` (quem não é coordenador) esconde os valores em R$ —
+    ver core/redaction.py. Os avisos já vêm sem valores nesse caso
+    (`_balance_warnings(show_values=...)`)."""
     out = PurchaseProcessOut.model_validate(process, from_attributes=True)
+    out.estimated_unit_value = money(process.estimated_unit_value, visible=visible)
+    out.estimated_value = money(process.estimated_value, visible=visible)
+    out.final_value = money(process.final_value, visible=visible)
     out.warnings = warnings or []
     return out
 
@@ -85,7 +101,7 @@ def list_processes(
     position_id: int | None = None,
     status_filter: str | None = None,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     query = select(PurchaseProcess).where(PurchaseProcess.project_id == project_id)
     if position_id is not None:
@@ -102,7 +118,8 @@ def list_processes(
         )
     processes = list(session.exec(query))
     processes.sort(key=lambda p: p.created_at, reverse=True)
-    return processes
+    visible = membership.role == "coordenador"
+    return [_out(p, visible=visible) for p in processes]
 
 
 @router.post("", response_model=PurchaseProcessOut, status_code=status.HTTP_201_CREATED)
@@ -111,7 +128,7 @@ def create_process(
     body: PurchaseProcessCreate,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     position = session.get(BudgetPosition, body.budget_position_id)
     if position is None or position.project_id != project_id:
@@ -130,7 +147,9 @@ def create_process(
             )
 
     estimated_value = round_money(body.quantity * body.estimated_unit_value)
-    warnings = _balance_warnings(session, project_id, position.id, estimated_value)
+    warnings = _balance_warnings(
+        session, project_id, position.id, estimated_value, show_values=membership.role == "coordenador"
+    )
 
     process = PurchaseProcess(
         project_id=project_id,
@@ -158,7 +177,29 @@ def create_process(
     )
     session.commit()
     session.refresh(process)
-    return _out(process, warnings)
+    return _out(process, warnings, visible=membership.role == "coordenador")
+
+
+@router.post("/check-availability", response_model=AvailabilityCheckOut)
+def check_availability(
+    project_id: int,
+    body: AvailabilityCheckRequest,
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(get_membership),
+):
+    """Responde só sim/não — nunca o saldo real, mesmo pra quem não é
+    coordenador (ver core/redaction.py). É o que deixa o operador comum
+    conferir se um valor cabe no orçamento sem nunca ver o número."""
+    position = session.get(BudgetPosition, body.budget_position_id)
+    if position is None or position.project_id != project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item de orçamento não encontrado.")
+
+    balance = position_balance(session, project_id, body.budget_position_id)
+    if balance is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Projeto não tem revisão orçamentária ativa.")
+
+    estimated = round_money(body.quantity * body.estimated_unit_value)
+    return AvailabilityCheckOut(available=(balance.balance - estimated) >= 0)
 
 
 @router.get("/{process_id}", response_model=PurchaseProcessOut)
@@ -166,9 +207,10 @@ def get_process(
     project_id: int,
     process_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
-    return _get_process(session, project_id, process_id)
+    process = _get_process(session, project_id, process_id)
+    return _out(process, visible=membership.role == "coordenador")
 
 
 @router.patch("/{process_id}", response_model=PurchaseProcessOut)
@@ -217,6 +259,7 @@ def update_process(
             warnings = _balance_warnings(
                 session, project_id, process.budget_position_id,
                 new_estimated - process.estimated_value, process.origin,
+                show_values=membership.role == "coordenador",
             )
 
     changes = {
@@ -241,7 +284,7 @@ def update_process(
         )
     _commit_or_conflict(session)
     session.refresh(process)
-    return _out(process, warnings)
+    return _out(process, warnings, visible=membership.role == "coordenador")
 
 
 @router.post("/{process_id}/transition", response_model=PurchaseProcessOut)
@@ -255,7 +298,7 @@ def transition_process(
 ):
     process = _get_process(session, project_id, process_id)
     try:
-        return apply_transition(
+        updated = apply_transition(
             session,
             process,
             action=body.action,
@@ -269,6 +312,7 @@ def transition_process(
         )
     except TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return _out(updated, visible=membership.role == "coordenador")
 
 
 def _doc_out(doc: Document) -> DocumentOut:
