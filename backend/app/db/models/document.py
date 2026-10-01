@@ -18,12 +18,21 @@ def _utcnow() -> datetime:
 DOC_TYPES = [
     "cotacao",
     "solicitacao_autorizacao",
+    "autorizacao_fornecimento",  # AF emitida pela fundação — marca o processo como autorizado
     "nota_fiscal",
+    "boleto",
+    "pedido_importacao",
     "comprovante_recebimento",
     "recibo_pessoal",
     "outro",
 ]
 MAX_QUOTES_PER_PROCESS = 3
+
+# Onde está o arquivo: "upload" = enviado pela API, guardado no volume do
+# módulo (storage_path relativo a MODULE_UPLOAD_ROOT); "drive" = já existe no
+# drive do projeto e o módulo só aponta para ele (storage_path relativo à
+# pasta do projeto) — nunca é copiado nem apagado pelo módulo.
+STORAGE_KINDS = ("upload", "drive")
 
 
 class Document(SQLModel, table=True):
@@ -33,6 +42,8 @@ class Document(SQLModel, table=True):
     doc_type: str
     original_filename: str
     storage_path: str
+    storage_kind: str = "upload"
+    sha256: str | None = None  # só para uploads; arquivos do drive não são lidos para não baixar o OneDrive
     content_type: str
     size_bytes: int
     period_label: str | None = None  # ex. "2024-03" — usado por recibo_pessoal (Milestone 3)

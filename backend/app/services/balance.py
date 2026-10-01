@@ -3,12 +3,13 @@ usada tanto pela tabela "Saldo por Item" quanto pelo "Quadro Resumo".
 
 saldo = planejado + rendimentos − comprometido − realizado
 
-`comprometido` soma o valor estimado de processos de compra ainda em
-andamento (não concluídos nem cancelados/rejeitados) — é isso que faz o
-saldo já refletir uma compra em cotação/autorização antes mesmo dela virar
-nota fiscal, resolvendo a dor original (colaborador não precisa perguntar
-ao coordenador se "aquele valor já tá comprometido"). `realizado` soma o
-valor final de processos concluídos.
+`comprometido` soma o valor estimado de processos de compra ainda ANTES da
+autorização (verificação de orçamento, cotação, aguardando autorização) —
+é isso que faz o saldo já refletir uma compra em andamento, resolvendo a
+dor original (colaborador não precisa perguntar ao coordenador se "aquele
+valor já tá comprometido"). `realizado` segue a planilha de acompanhamento:
+soma os processos autorizados em diante (autorizado, nota fiscal,
+recebimento, concluído), pelo valor final quando existe, senão o estimado.
 """
 
 from __future__ import annotations
@@ -21,7 +22,8 @@ from sqlmodel import Session, select
 
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition
 from app.db.models.personnel import PersonnelAssignment
-from app.db.models.purchase import IN_PROGRESS_STATES, PurchaseProcess
+from app.db.models.project import Project
+from app.db.models.purchase import PRE_AUTHORIZATION_COMMITTED_STATES, REALIZED_STATES, PurchaseProcess
 from app.services.accrual import compute_accrual
 
 
@@ -39,6 +41,21 @@ class ItemBalance:
     committed: Decimal
     executed: Decimal
     balance: Decimal
+    # "Quant. Disponível" da planilha: quantidade prevista menos a já lançada
+    # em processos (comprometidos ou realizados). Nulo para Equipe Executora,
+    # que não se mede em unidades.
+    available_quantity: Decimal | None = None
+
+
+def _used_quantity(processes: list[PurchaseProcess]) -> Decimal:
+    return sum(
+        (
+            p.quantity
+            for p in processes
+            if p.status in PRE_AUTHORIZATION_COMMITTED_STATES or p.status in REALIZED_STATES
+        ),
+        Decimal("0"),
+    )
 
 
 def _committed_and_executed_from(
@@ -49,10 +66,17 @@ def _committed_and_executed_from(
     # errada) — somar os dois sem checar a categoria aqui é seguro e evita
     # ter que buscar a posição só pra ramificar.
     committed = sum(
-        (p.estimated_value for p in processes if p.status in IN_PROGRESS_STATES), Decimal("0")
+        (p.estimated_value for p in processes if p.status in PRE_AUTHORIZATION_COMMITTED_STATES),
+        Decimal("0"),
     )
+    # Realizado = processo autorizado em diante, como na planilha: vale o
+    # valor final (nota fiscal) quando já existe, senão o estimado.
     executed = sum(
-        (p.final_value for p in processes if p.status == "concluido" and p.final_value is not None),
+        (
+            p.final_value if p.final_value is not None else p.estimated_value
+            for p in processes
+            if p.status in REALIZED_STATES
+        ),
         Decimal("0"),
     )
 
@@ -70,7 +94,9 @@ def _committed_and_executed_from(
     return committed, executed
 
 
-def item_balances(session: Session, revision_id: int, category: str | None = None) -> list[ItemBalance]:
+def item_balances(
+    session: Session, revision_id: int, category: str | None = None, position_id: int | None = None
+) -> list[ItemBalance]:
     query = (
         select(BudgetItem, BudgetPosition)
         .where(BudgetItem.revision_id == revision_id)
@@ -78,6 +104,8 @@ def item_balances(session: Session, revision_id: int, category: str | None = Non
     )
     if category is not None:
         query = query.where(BudgetPosition.category == category)
+    if position_id is not None:
+        query = query.where(BudgetPosition.id == position_id)
 
     rows = list(session.exec(query))
     position_ids = [position.id for _, position in rows]
@@ -106,6 +134,12 @@ def item_balances(session: Session, revision_id: int, category: str | None = Non
             today,
         )
         balance = item.planned_value + item.yield_amount - committed - executed
+        is_personnel = bool(EXPENSE_CATEGORIES[position.category]["is_personnel"])
+        available_quantity = (
+            None
+            if is_personnel
+            else item.planned_quantity - _used_quantity(processes_by_position.get(position.id, []))
+        )
         results.append(
             ItemBalance(
                 position_id=position.id,
@@ -120,10 +154,44 @@ def item_balances(session: Session, revision_id: int, category: str | None = Non
                 committed=committed,
                 executed=executed,
                 balance=balance,
+                available_quantity=available_quantity,
             )
         )
     results.sort(key=lambda r: (r.category, r.item_number))
     return results
+
+
+def _brl(value: Decimal) -> str:
+    # 1234.5 -> "R$ 1.234,50" (formato brasileiro, sem depender de locale)
+    text = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {text}"
+
+
+def check_balance(session: Session, project: Project, position_id: int, additional: Decimal) -> str | None:
+    """Devolve a mensagem de "saldo insuficiente" se `additional` não cabe no
+    saldo do item, ou None se cabe. `additional` é o quanto o valor contado do
+    item AUMENTA com a operação (processo novo = o valor inteiro; edição = só
+    a diferença) — diminuir ou manter nunca é problema.
+
+    Esta função só INFORMA; quem decide se bloqueia ou apenas avisa é a
+    política do projeto (`Project.balance_policy`), aplicada pela rota."""
+    if additional <= 0:
+        return None
+    if project.active_revision_id is None:
+        return "Projeto não tem revisão orçamentária ativa."
+    rows = item_balances(session, project.active_revision_id, position_id=position_id)
+    if not rows:
+        return "Este item não faz parte da revisão orçamentária ativa."
+    row = rows[0]
+    if additional <= row.balance:
+        return None
+    label = EXPENSE_CATEGORIES[row.category]["label"]
+    available = max(row.balance, Decimal("0"))
+    return (
+        f"Saldo insuficiente no item Nº {row.item_number} ({label}): "
+        f"disponível {_brl(available)}, valor solicitado {_brl(additional)} "
+        f"(faltam {_brl(additional - available)})."
+    )
 
 
 @dataclass

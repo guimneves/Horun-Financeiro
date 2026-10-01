@@ -12,6 +12,9 @@ os.environ["HORUN_DEV_MODE"] = "false"
 _db_fd, _db_path = tempfile.mkstemp(suffix=".db")
 os.close(_db_fd)
 os.environ["MODULE_DATABASE_URL"] = f"sqlite:///{_db_path}"
+# Uploads dos testes numa pasta temporária — senão caem em ./uploads, dentro
+# do projeto.
+os.environ["MODULE_UPLOAD_ROOT"] = tempfile.mkdtemp(prefix="financeiro-uploads-")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

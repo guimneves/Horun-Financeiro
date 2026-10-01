@@ -6,11 +6,13 @@ import { MoneyValue } from '../common/MoneyValue'
 
 interface NewPurchaseProcessModalProps {
   projectId: number
+  /** Política de saldo do projeto: true = recusa valor acima do saldo; false = só avisa */
+  blockOnExceed: boolean
   onClose: () => void
   onCreated: () => void
 }
 
-export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPurchaseProcessModalProps) {
+export function NewPurchaseProcessModal({ projectId, blockOnExceed, onClose, onCreated }: NewPurchaseProcessModalProps) {
   const [items, setItems] = useState<ItemBalance[] | null>(null)
   const [positionId, setPositionId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
@@ -118,10 +120,17 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
         </div>
 
         {exceedsBalance && (
-          <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#fef9c3', color: '#a16207' }}>
-            Aviso: o valor estimado (R$ {estimatedValue.toFixed(2)}) ultrapassa o saldo disponível deste item. Você
-            ainda pode prosseguir.
-          </p>
+          blockOnExceed ? (
+            <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#fee2e2', color: '#b91c1c' }}>
+              Saldo insuficiente: o valor estimado (R$ {estimatedValue.toFixed(2)}) ultrapassa o saldo disponível deste
+              item. Reduza o valor ou escolha outro item — não é possível criar o processo assim.
+            </p>
+          ) : (
+            <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#fef9c3', color: '#a16207' }}>
+              Aviso: o valor estimado (R$ {estimatedValue.toFixed(2)}) ultrapassa o saldo disponível deste item. Neste
+              projeto isso é permitido — o processo será criado e o saldo ficará negativo.
+            </p>
+          )
         )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
@@ -138,7 +147,7 @@ export function NewPurchaseProcessModal({ projectId, onClose, onCreated }: NewPu
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || positionId === null || !title.trim() || !unitValue}
+            disabled={submitting || positionId === null || !title.trim() || !unitValue || (exceedsBalance && blockOnExceed)}
             className="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
             style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
           >

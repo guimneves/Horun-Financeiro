@@ -6,6 +6,7 @@ import { TERMINAL_STATUSES } from '../types/purchase'
 import { PurchaseStatusBadge } from '../components/purchases/PurchaseStatusBadge'
 import { ActionPanel } from '../components/purchases/ActionPanel'
 import { DocumentsSection } from '../components/purchases/DocumentsSection'
+import { ProcessHistory } from '../components/purchases/ProcessHistory'
 import { MoneyValue } from '../components/common/MoneyValue'
 import type { ProjectContext } from './ProjectLayout'
 
@@ -37,6 +38,7 @@ export function PurchaseProcessDetailPage() {
     reason?: string
     vendor?: string
     final_value?: string
+    override_reason?: string
   }) {
     await purchasesApi.transition(project.id, process!.id, input)
     load()
@@ -64,6 +66,25 @@ export function PurchaseProcessDetailPage() {
         </div>
         <PurchaseStatusBadge status={process.status} />
       </div>
+
+      {process.origin === 'drive_import' && (
+        <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Criado a partir da pasta do drive
+          {process.drive_rel_path ? (
+            <>
+              {' '}
+              —{' '}
+              <Link
+                to={`/projects/${project.id}/drive?path=${encodeURIComponent(process.drive_rel_path)}`}
+                style={{ color: 'var(--color-primary)' }}
+              >
+                abrir a pasta
+              </Link>
+            </>
+          ) : null}
+          . O estado foi inferido pelos arquivos que existiam; confira e corrija se preciso.
+        </p>
+      )}
 
       {process.previous_attempt_id && (
         <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -103,7 +124,7 @@ export function PurchaseProcessDetailPage() {
         </div>
         <div>
           <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Valor estimado (comprometido)
+            Valor estimado
           </div>
           <MoneyValue value={process.estimated_value} />
         </div>
@@ -137,6 +158,8 @@ export function PurchaseProcessDetailPage() {
           />
         </div>
       </div>
+
+      <ProcessHistory projectId={project.id} processId={process.id} refreshKey={process.updated_at} />
     </div>
   )
 }

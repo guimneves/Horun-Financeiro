@@ -8,6 +8,8 @@ from app.db.models.budget import (
 from app.db.models.purchase import PurchaseProcess
 from app.db.models.personnel import Person, PersonnelAssignment
 from app.db.models.document import Document
+from app.db.models.audit import AuditEvent
+from app.db.models.funding import FundingInstallment
 
 __all__ = [
     "Project",
@@ -20,4 +22,6 @@ __all__ = [
     "Person",
     "PersonnelAssignment",
     "Document",
+    "AuditEvent",
+    "FundingInstallment",
 ]

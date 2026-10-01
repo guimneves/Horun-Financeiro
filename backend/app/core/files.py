@@ -1,8 +1,12 @@
-"""Armazenamento de documentos em disco — caminho relativo salvo no banco
-(`Document.storage_path`), arquivo de verdade num diretório que vira volume
-Docker nomeado na hora do deploy (mesma disciplina do Postgres: nunca só
-dentro do container). `MODULE_UPLOAD_ROOT` configurável por env, mesmo
-padrão de `MODULE_DATABASE_URL` em core/config.py.
+"""Armazenamento de documentos. Há dois tipos (`Document.storage_kind`):
+
+- "upload": enviado pela API e guardado em disco, num diretório que vira
+  volume Docker nomeado na hora do deploy (mesma disciplina do Postgres: nunca
+  só dentro do container). Caminho relativo salvo no banco
+  (`Document.storage_path`); `MODULE_UPLOAD_ROOT` configurável por env, mesmo
+  padrão de `MODULE_DATABASE_URL` em core/config.py.
+- "drive": o arquivo já existe na pasta do projeto no drive e o módulo só
+  aponta para ele. Nunca é copiado nem apagado por aqui.
 """
 
 from __future__ import annotations
@@ -11,6 +15,9 @@ import uuid
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.drive import fs_path, project_drive_dir, safe_join
+from app.db.models.document import Document
+from app.db.models.project import Project
 
 UPLOAD_ROOT = Path(settings.upload_root).resolve()
 
@@ -33,7 +40,17 @@ def resolve_path(storage_path: str) -> Path:
     return UPLOAD_ROOT / storage_path
 
 
+def resolve_document_path(project: Project, doc: Document) -> str:
+    """Caminho no disco do arquivo de um documento, pronto para abrir (já com
+    o prefixo de caminho longo no Windows). Levanta `DriveError` se o drive não
+    estiver acessível (só para documentos do tipo "drive")."""
+    if doc.storage_kind == "drive":
+        return fs_path(safe_join(project_drive_dir(project), doc.storage_path))
+    return fs_path(resolve_path(doc.storage_path))
+
+
 def delete_file(storage_path: str) -> None:
+    """Apaga um arquivo ENVIADO pela API. Nunca chamar para documento do drive."""
     path = resolve_path(storage_path)
     if path.exists():
         path.unlink()

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
 import { projectsApi } from '../api/projects'
 import type { Project } from '../types'
 
 export interface ProjectContext {
   project: Project
+  /** Recarrega o projeto (ex.: depois de mudar a pasta do drive ou a política de saldo) */
+  reloadProject: () => void
 }
 
 const NAV_ITEMS = [
@@ -12,11 +14,13 @@ const NAV_ITEMS = [
   { to: 'budget', label: 'Orçamento', end: false },
   { to: 'purchases', label: 'Compras', end: false },
   { to: 'personnel', label: 'Equipe', end: false },
+  { to: 'drive', label: 'Drive', end: false },
 ]
 
 const COORDENADOR_NAV_ITEMS = [
   { to: 'revisions', label: 'Revisões', end: false },
   { to: 'members', label: 'Membros', end: false },
+  { to: 'settings', label: 'Configurações', end: false },
 ]
 
 export function ProjectLayout() {
@@ -24,13 +28,17 @@ export function ProjectLayout() {
   const [project, setProject] = useState<Project | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const reloadProject = useCallback(() => {
     if (!projectId) return
     projectsApi
       .get(Number(projectId))
       .then(setProject)
       .catch((err) => setError(err.message))
   }, [projectId])
+
+  useEffect(() => {
+    reloadProject()
+  }, [reloadProject])
 
   if (error) return <p className="p-6 text-red-600">Erro ao carregar projeto: {error}</p>
   if (project === null) return <p className="p-6">Carregando…</p>
@@ -70,7 +78,7 @@ export function ProjectLayout() {
       </div>
 
       <div className="flex-1">
-        <Outlet context={{ project } satisfies ProjectContext} />
+        <Outlet context={{ project, reloadProject } satisfies ProjectContext} />
       </div>
     </div>
   )

@@ -36,15 +36,32 @@ const ACTIONS_BY_STATUS: Record<string, ActionDef[]> = {
   comprovante_recebimento: [{ action: 'concluir', label: 'Concluir processo' }],
 }
 
+// Ações que exigem um documento anexado — o coordenador pode dispensá-lo
+// justificando (a justificativa fica no histórico do processo).
+const GUARDED_ACTIONS = new Set<TransitionAction>([
+  'avancar_cotacao',
+  'solicitar_autorizacao',
+  'autorizar',
+  'emitir_nota_fiscal',
+  'confirmar_recebimento',
+])
+
 interface ActionPanelProps {
   process: PurchaseProcess
   isCoordenador: boolean
-  onTransition: (input: { action: TransitionAction; reason?: string; vendor?: string; final_value?: string }) => Promise<void>
+  onTransition: (input: {
+    action: TransitionAction
+    reason?: string
+    vendor?: string
+    final_value?: string
+    override_reason?: string
+  }) => Promise<void>
 }
 
 export function ActionPanel({ process, isCoordenador, onTransition }: ActionPanelProps) {
   const [activeAction, setActiveAction] = useState<ActionDef | null>(null)
   const [reason, setReason] = useState('')
+  const [overrideReason, setOverrideReason] = useState('')
   const [vendor, setVendor] = useState(process.vendor ?? '')
   const [finalValue, setFinalValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -63,9 +80,11 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
         reason: def.needsReason ? reason : undefined,
         vendor: def.needsVendor ? vendor : undefined,
         final_value: def.needsFinalValue ? finalValue : undefined,
+        override_reason: isCoordenador && GUARDED_ACTIONS.has(def.action) && overrideReason.trim() ? overrideReason.trim() : undefined,
       })
       setActiveAction(null)
       setReason('')
+      setOverrideReason('')
       setFinalValue('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao executar ação.')
@@ -130,6 +149,20 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
+          )}
+          {isCoordenador && GUARDED_ACTIONS.has(activeAction.action) && (
+            <div>
+              <input
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                placeholder="Faltou o documento? Justifique para avançar mesmo assim (opcional)"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+              />
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Só é usada se o documento exigido estiver faltando; fica registrada no histórico.
+              </p>
+            </div>
           )}
           <div className="flex gap-2">
             <button

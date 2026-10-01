@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Column, Numeric
+from sqlalchemy import Column, Index, Numeric
 from sqlmodel import Field, SQLModel
 
 
@@ -34,6 +34,12 @@ PURCHASE_STATES = [
 ]
 TERMINAL_STATES = {"concluido", "rejeitado", "cancelado"}
 IN_PROGRESS_STATES = set(PURCHASE_STATES) - TERMINAL_STATES
+# Saldo, no mesmo critério da planilha de acompanhamento: o valor passa a ser
+# "realizado" quando o processo é autorizado (a planilha lança uma linha
+# assim que existe nº de processo COPPETEC). Antes disso é só "comprometido"
+# — extensão do programa, a planilha não tem essa coluna.
+PRE_AUTHORIZATION_COMMITTED_STATES = {"verificacao_orcamento", "cotacao", "aguardando_autorizacao"}
+REALIZED_STATES = {"autorizado", "nota_fiscal_emitida", "comprovante_recebimento", "concluido"}
 # Antes da autorização, quem está tocando a compra (não necessariamente o
 # coordenador) ainda pode editar os campos básicos do processo — depois de
 # autorizado, só o coordenador mexe (ver update_process em routes_purchases.py).
@@ -41,6 +47,11 @@ PRE_AUTHORIZATION_STATES = {"verificacao_orcamento", "cotacao", "aguardando_auto
 
 
 class PurchaseProcess(SQLModel, table=True):
+    # Nº de processo COPPETEC único por projeto (vários processos sem número
+    # ainda — nulos não colidem). O número é guardado normalizado ("AAAA-N"),
+    # ver app/core/process_number.py.
+    __table_args__ = (Index("uq_process_project_number", "project_id", "process_number", unique=True),)
+
     id: int | None = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id", index=True)
     budget_position_id: int = Field(foreign_key="budgetposition.id", index=True)
@@ -55,6 +66,8 @@ class PurchaseProcess(SQLModel, table=True):
     status: str = "verificacao_orcamento"
     previous_attempt_id: int | None = Field(default=None, foreign_key="purchaseprocess.id")
     cancel_reason: str | None = None
+    origin: str = "manual"  # manual | drive_import (criado a partir da pasta do drive)
+    drive_rel_path: str | None = None  # pasta deste processo no drive, relativa à pasta do projeto
     created_by_user_id: str
     created_by_username: str
     created_at: datetime = Field(default_factory=_utcnow)

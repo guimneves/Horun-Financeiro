@@ -16,9 +16,15 @@ export interface MembershipCreateInput {
   role: 'coordenador' | 'colaborador'
 }
 
+export interface ProjectUpdateInput {
+  drive_folder?: string
+  balance_policy?: 'bloquear' | 'avisar'
+}
+
 export const projectsApi = {
   list: () => api.get<Project[]>('/projects'),
   get: (projectId: number) => api.get<Project>(`/projects/${projectId}`),
+  update: (projectId: number, body: ProjectUpdateInput) => api.patch<Project>(`/projects/${projectId}`, body),
 
   members: (projectId: number) => api.get<Membership[]>(`/projects/${projectId}/members`),
   addMember: (projectId: number, body: MembershipCreateInput) =>

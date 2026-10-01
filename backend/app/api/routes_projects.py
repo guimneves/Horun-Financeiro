@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.drive import DriveError, resolve_drive_folder
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador, require_core_admin
 from app.db.models.project import Project, ProjectMembership
@@ -96,7 +97,18 @@ def update_project(
     project = session.get(Project, project_id)
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    if changes.get("balance_policy") not in (None, "bloquear", "avisar"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Política de saldo inválida (bloquear ou avisar).")
+    if "drive_folder" in changes:
+        folder = (changes["drive_folder"] or "").strip()
+        if folder:
+            try:
+                resolve_drive_folder(folder)
+            except DriveError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+        changes["drive_folder"] = folder or None
+    for field, value in changes.items():
         setattr(project, field, value)
     session.add(project)
     session.commit()

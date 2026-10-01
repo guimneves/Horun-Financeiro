@@ -38,6 +38,13 @@ class Project(SQLModel, table=True):
     # Validado na camada de API, não no banco — mesma filosofia já usada
     # pras listas fechadas em string (ver EXPENSE_CATEGORIES).
     active_revision_id: int | None = Field(default=None)
+    # Pasta deste projeto no drive do Financeiro, RELATIVA a MODULE_DRIVE_ROOT
+    # (ex. "Guilherme - 25465 Maturação Artificial"). Nulo = sem drive.
+    drive_folder: str | None = None
+    # O que fazer quando um valor não cabe no saldo do item: "bloquear"
+    # recusa a operação; "avisar" deixa passar e devolve um aviso. Cada
+    # projeto escolhe — o programa não impõe uma política única.
+    balance_policy: str = "bloquear"
     created_at: datetime = Field(default_factory=_utcnow)
 
 

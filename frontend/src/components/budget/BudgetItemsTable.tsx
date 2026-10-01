@@ -15,6 +15,9 @@ export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[
             <tr style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
               <th className="px-3 py-2 text-left font-medium">Nº</th>
               <th className="px-3 py-2 text-left font-medium">Descrição</th>
+              <th className="px-3 py-2 text-right font-medium" title="Quantidade prevista menos a já lançada em processos">
+                Qtd. disponível
+              </th>
               <th className="px-3 py-2 text-right font-medium">Planejado</th>
               <th className="px-3 py-2 text-right font-medium">Rendimentos</th>
               <th className="px-3 py-2 text-right font-medium">Comprometido</th>
@@ -30,6 +33,17 @@ export function BudgetItemsTable({ items, categoryLabel }: { items: ItemBalance[
                 </td>
                 <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>
                   {item.description}
+                </td>
+                <td
+                  className="px-3 py-2 text-right"
+                  style={{
+                    color:
+                      item.available_quantity !== null && Number(item.available_quantity) < 0
+                        ? '#dc2626'
+                        : 'var(--color-text-muted)',
+                  }}
+                >
+                  {item.available_quantity === null ? '—' : `${Number(item.available_quantity)} / ${Number(item.planned_quantity)}`}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <MoneyValue value={item.planned_value} />
