@@ -53,6 +53,9 @@ class PurchaseProcessOut(BaseModel):
     updated_at: datetime
     completed_at: datetime | None
     closed_at: datetime | None
+    # Nota fiscal acima do saldo, confirmada depois do aviso (sinal na lista).
+    over_balance_confirmed_by: str | None = None
+    over_balance_confirmed_at: datetime | None = None
     # Avisos que não impedem a operação (ex.: valor acima do saldo num projeto
     # com política "avisar"). Só vem preenchido na resposta de criar/editar.
     warnings: list[str] = []
@@ -76,6 +79,9 @@ class TransitionRequest(BaseModel):
     final_value: Money | None = None
     # Só coordenador: avança mesmo sem o documento exigido, justificando.
     override_reason: str | None = None
+    # Nota fiscal acima do saldo do item: a primeira tentativa volta 428 com o
+    # aviso; reenviar com true registra mesmo assim (e marca o processo).
+    confirm_over_balance: bool = False
 
 
 class DocumentTypeUpdate(BaseModel):

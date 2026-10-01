@@ -14,6 +14,31 @@ Duas branches carregam este trabalho:
 
 ---
 
+## 01/10/2026 — Trabalho de 27–28/09 integrado + nota fiscal acima do saldo
+
+- **Integrado** o que tinha ficado numa outra cópia local (branch
+  `backup/coordenador-0928`): senha mestra de coordenador, redação de valores
+  em R$ para colaborador, barra lateral com os projetos, página Organização,
+  diretório próprio de usuários, "Ver como" (só dev), nº de processo COPPETEC
+  por item, página própria do item de orçamento, verificação de
+  disponibilidade (sim/não, sem mostrar o saldo).
+- **Coerência entre as duas versões**: a mensagem de saldo insuficiente não
+  cita valores para colaborador; parcelas e visão geral passam a ser só do
+  coordenador; o histórico de eventos chega ao colaborador sem o detalhe.
+- **Senha mestra endurecida** (o repositório é público): sem chave de
+  assinatura padrão — fora do DEV_MODE o módulo não sobe sem
+  `MODULE_SECRET_KEY` (32+ caracteres); sem senha inicial padrão
+  (`MODULE_COORDENADOR_PASSWORD`); 5 erros bloqueiam a pessoa por 15 min.
+- **Nota fiscal acima do saldo**: registrar a nota com valor final que passa
+  do saldo do item devolve um aviso (HTTP 428) em vez de gravar; a tela mostra
+  o aviso e oferece "Corrigir valor" ou "Registrar mesmo assim". Confirmada, o
+  processo guarda quem confirmou e quando (`over_balance_confirmed_by/_at`) e
+  aparece com o sinal "Acima do saldo" na lista de compras, na página do item
+  e no detalhe. Vale para qualquer política de saldo (a nota é um fato).
+- 163 testes do backend.
+
+---
+
 ## 01/10/2026 — Correções da revisão de código (em `master`)
 
 Revisão dos repositórios do Horun; os achados mais urgentes deste módulo:

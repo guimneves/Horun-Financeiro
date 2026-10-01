@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ApiError } from '../../api/client'
 import type { PurchaseProcess, TransitionAction } from '../../types/purchase'
 
 interface ActionDef {
@@ -55,6 +56,7 @@ interface ActionPanelProps {
     vendor?: string
     final_value?: string
     override_reason?: string
+    confirm_over_balance?: boolean
   }) => Promise<void>
 }
 
@@ -66,12 +68,14 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
   const [finalValue, setFinalValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Aviso de nota fiscal acima do saldo (428 do backend) esperando confirmação
+  const [overBalanceWarning, setOverBalanceWarning] = useState<string | null>(null)
 
   const available = (ACTIONS_BY_STATUS[process.status] ?? []).filter((a) => !a.coordenadorOnly || isCoordenador)
 
   if (available.length === 0) return null
 
-  async function confirm(def: ActionDef) {
+  async function confirm(def: ActionDef, confirmOverBalance = false) {
     setSubmitting(true)
     setError(null)
     try {
@@ -81,13 +85,20 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
         vendor: def.needsVendor ? vendor : undefined,
         final_value: def.needsFinalValue ? finalValue : undefined,
         override_reason: isCoordenador && GUARDED_ACTIONS.has(def.action) && overrideReason.trim() ? overrideReason.trim() : undefined,
+        confirm_over_balance: confirmOverBalance || undefined,
       })
       setActiveAction(null)
       setReason('')
       setOverrideReason('')
       setFinalValue('')
+      setOverBalanceWarning(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao executar ação.')
+      if (err instanceof ApiError && err.status === 428) {
+        // nota fiscal acima do saldo: mostra o aviso e espera a confirmação
+        setOverBalanceWarning(err.message)
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao executar ação.')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -138,7 +149,10 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
               placeholder="Valor final da compra (R$)"
               value={finalValue}
-              onChange={(e) => setFinalValue(e.target.value)}
+              onChange={(e) => {
+                setFinalValue(e.target.value)
+                setOverBalanceWarning(null)
+              }}
             />
           )}
           {activeAction.needsReason && (
@@ -164,25 +178,51 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
               </p>
             </div>
           )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveAction(null)}
-              className="rounded-md px-3 py-1.5 text-sm"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              Voltar
-            </button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => confirm(activeAction)}
-              className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-              style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
-            >
-              {submitting ? 'Enviando…' : 'Confirmar'}
-            </button>
-          </div>
+          {overBalanceWarning ? (
+            <div className="rounded-md p-3 text-sm" style={{ background: '#fef3c7', color: '#92400e' }} role="alert">
+              <p className="mb-2 font-medium">Nota fiscal acima do saldo do item</p>
+              <p className="mb-3">{overBalanceWarning}</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOverBalanceWarning(null)}
+                  className="rounded-md px-3 py-1.5 text-sm"
+                  style={{ color: '#92400e' }}
+                >
+                  Corrigir valor
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => confirm(activeAction, true)}
+                  className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                  style={{ background: '#92400e', color: '#ffffff' }}
+                >
+                  {submitting ? 'Enviando…' : 'Registrar mesmo assim'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveAction(null)}
+                className="rounded-md px-3 py-1.5 text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => confirm(activeAction)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
+              >
+                {submitting ? 'Enviando…' : 'Confirmar'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

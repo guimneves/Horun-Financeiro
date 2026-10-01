@@ -59,6 +59,9 @@ export interface PurchaseProcess {
   updated_at: string
   completed_at: string | null
   closed_at: string | null
+  /** Nota fiscal acima do saldo, confirmada depois do aviso (sinal de alerta na lista) */
+  over_balance_confirmed_by: string | null
+  over_balance_confirmed_at: string | null
 }
 
 export interface PurchaseDocument {

@@ -36,8 +36,7 @@ from app.schemas.purchase import (
     TransitionRequest,
 )
 from app.services.audit import record_event
-from app.services.balance import check_balance
-from app.services.balance import position_balance
+from app.services.balance import brl, check_balance, position_balance
 from app.services.transitions import TransitionError, apply_transition
 
 router = APIRouter(prefix="/projects/{project_id}/purchase-processes", tags=["purchases"])
@@ -82,6 +81,34 @@ def _out(process: PurchaseProcess, warnings: list[str] | None = None, *, visible
     out.final_value = money(process.final_value, visible=visible)
     out.warnings = warnings or []
     return out
+
+
+def _invoice_over_balance(
+    session: Session, process: PurchaseProcess, body: TransitionRequest, *, show_values: bool
+) -> str | None:
+    """Aviso se a nota fiscal passa do saldo do item, ou None.
+
+    A partir de "autorizado" o processo já conta como realizado pelo valor
+    ESTIMADO; com a nota, passa a contar pelo final. O que pode estourar o
+    saldo é só a diferença (final − estimado)."""
+    if body.action != "emitir_nota_fiscal" or body.final_value is None or process.status != "autorizado":
+        return None
+    additional = body.final_value - process.estimated_value
+    project = session.get(Project, process.project_id)
+    message = check_balance(session, project, process.budget_position_id, additional, show_values=show_values)
+    if message is None or not show_values:
+        return message
+    # Com valores: frase própria da nota fiscal — a genérica falaria em
+    # "valor solicitado" = só a diferença, o que confunde aqui.
+    row = position_balance(session, process.project_id, process.budget_position_id)
+    if row is None:
+        return message
+    available = max(row.balance, Decimal("0"))
+    return (
+        f"A nota fiscal de {brl(body.final_value)} fica {brl(additional)} acima do valor estimado "
+        f"({brl(process.estimated_value)}), mas o item Nº {row.item_number} só tem {brl(available)} de saldo "
+        f"(faltam {brl(additional - available)})."
+    )
 
 
 def _commit_or_conflict(session: Session) -> None:
@@ -297,6 +324,16 @@ def transition_process(
     membership: ProjectMembership = Depends(get_membership),
 ):
     process = _get_process(session, project_id, process_id)
+    is_coordenador = membership.role == "coordenador"
+    over_balance_warning = _invoice_over_balance(session, process, body, show_values=is_coordenador)
+    if over_balance_warning is not None and not body.confirm_over_balance:
+        # 428: o frontend mostra o aviso e pergunta; confirmando, reenvia com
+        # confirm_over_balance=true. Vale para qualquer política de saldo —
+        # a nota fiscal é um fato, não se bloqueia, só se registra o alerta.
+        raise HTTPException(
+            status.HTTP_428_PRECONDITION_REQUIRED,
+            f"{over_balance_warning} Confirme para registrar a nota fiscal mesmo assim.",
+        )
     try:
         updated = apply_transition(
             session,
@@ -309,6 +346,7 @@ def transition_process(
             final_value=body.final_value,
             actor=identity,
             override_reason=body.override_reason,
+            over_balance_warning=over_balance_warning,
         )
     except TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

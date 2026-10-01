@@ -20,6 +20,8 @@ export interface TransitionInput {
   final_value?: string
   /** Só coordenador: avança mesmo sem o documento exigido, justificando (fica no histórico) */
   override_reason?: string
+  /** Nota fiscal acima do saldo: o backend responde 428 com o aviso; reenviar com true registra mesmo assim */
+  confirm_over_balance?: boolean
 }
 
 export interface AvailabilityCheckInput {

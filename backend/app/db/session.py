@@ -76,6 +76,8 @@ def _run_migrations() -> None:
     _ensure_column("purchaseprocess", "drive_rel_path", "VARCHAR")
     _ensure_unique_index("uq_process_project_number", "purchaseprocess", "project_id, process_number")
     _ensure_column("budgetitem", "coppetec_process_number", "VARCHAR")
+    _ensure_column("purchaseprocess", "over_balance_confirmed_by", "VARCHAR")
+    _ensure_column("purchaseprocess", "over_balance_confirmed_at", "TIMESTAMP")
 
 
 def _ensure_module_settings() -> None:

@@ -109,10 +109,12 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. 134 testes do backend passam; frontend compila e passa
+- **`master`**: estável. 163 testes do backend passam; frontend compila e passa
   no lint. Tem paridade com a planilha, correção da base, leitura de pastas
   (modo local) e as correções da revisão de 01/10 (API sob `/api`, drive,
-  valores, upload de pessoal, portas do modo dev). Ver CHANGELOG.
+  valores, upload de pessoal, portas do modo dev), o trabalho de 27–28/09
+  (senha mestra de coordenador, redação de valores, barra lateral, Organização)
+  e o aviso de nota fiscal acima do saldo. Ver CHANGELOG.
 - **`wip/drive-agent`**: master + modo agente em andamento; **a suíte não importa**
   até terminar a religação (seção 7).
 - Nada disso foi testado em produção; não há deploy.
@@ -204,18 +206,13 @@ agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias
   precisam de conferência. Aceitar assim ou definir outra regra?
 - **12 processos com pasta e sem valor na planilha** entram com valor zero.
 - **Linhas inválidas da planilha** (valor não importado) — decidir caso a caso.
-- Nota fiscal acima do estimado e Equipe Executora: **não bloqueiam** — confirmar.
+- Equipe Executora acima do saldo: **não bloqueia** — confirmar. (Nota fiscal acima do
+  saldo: decidido em 01/10 — avisa, pede confirmação e marca o processo.)
 - `MAX_QUOTES_PER_PROCESS = 3` é um **máximo**; se a regra da fundação é um
   **mínimo** de 3 cotações, o modelo está invertido — confirmar.
 - Equipe Executora: importação de pessoal a partir das planilhas/pastas ainda não
   feita.
 - Alembic × `_ensure_column` (decidir com o Core).
-- **Trabalho de 27–28/09 fora do `master`**: senha mestra de coordenador,
-  página Organização, diretório próprio de usuários, "Ver como" (dev) e nº de
-  processo COPPETEC por item foram feitos numa outra cópia local, a partir de
-  `98ea7d4`, e nunca entraram aqui. Salvos na branch
-  **`backup/coordenador-0928`**. Decidir o que integrar (vai conflitar com
-  `c255f67` e com as correções de 01/10).
 - **Build Docker do frontend**: `package.json` aponta o design-system para
   `file:../../Horun Core/design-system`, fora do contexto de build
   (`./frontend`) — `docker compose build` falha fora da máquina de
@@ -224,8 +221,6 @@ agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias
 - **`wip/drive-agent`** precisa ser atualizada com o `master`: as rotas do
   agente passam a ficar sob `/api` automaticamente (laço em `main.py`); o
   agente tem que usar a URL com `/api`.
-- Nota fiscal acima do saldo: hoje grava sem aviso (o `final_value` não passa
-  por `_balance_warnings`). Avisar? (relacionado ao item "não bloqueiam" acima)
 
 ## 9. Plano (ordem sugerida)
 

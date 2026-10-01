@@ -163,7 +163,7 @@ def item_balances(
     return results
 
 
-def _brl(value: Decimal) -> str:
+def brl(value: Decimal) -> str:
     # 1234.5 -> "R$ 1.234,50" (formato brasileiro, sem depender de locale)
     text = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {text}"
@@ -197,8 +197,8 @@ def check_balance(
     available = max(row.balance, Decimal("0"))
     return (
         f"Saldo insuficiente no item Nº {row.item_number} ({label}): "
-        f"disponível {_brl(available)}, valor solicitado {_brl(additional)} "
-        f"(faltam {_brl(additional - available)})."
+        f"disponível {brl(available)}, valor solicitado {brl(additional)} "
+        f"(faltam {brl(additional - available)})."
     )
 
 

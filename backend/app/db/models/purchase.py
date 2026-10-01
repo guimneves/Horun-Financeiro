@@ -74,3 +74,8 @@ class PurchaseProcess(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
     completed_at: datetime | None = None
     closed_at: datetime | None = None  # setado em rejeitado/cancelado também
+    # Nota fiscal registrada ACIMA do saldo do item, confirmada por alguém
+    # depois do aviso (routes_purchases.transition_process). Nunca bloqueia —
+    # a nota é um fato —, mas fica marcada para aparecer na lista.
+    over_balance_confirmed_by: str | None = None
+    over_balance_confirmed_at: datetime | None = None
