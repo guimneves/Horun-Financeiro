@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { budgetApi } from '../api/budget'
 import type { CategorySummary } from '../types'
 import { CategorySummaryCard } from '../components/budget/CategorySummaryCard'
+import { OverviewSection } from '../components/budget/OverviewSection'
 import type { ProjectContext } from './ProjectLayout'
 
 export function DashboardPage() {
@@ -34,6 +35,8 @@ export function DashboardPage() {
 
   return (
     <div className="p-6">
+      <OverviewSection projectId={project.id} />
+
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
         Despesas de Capital
       </h3>

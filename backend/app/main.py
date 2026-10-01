@@ -6,7 +6,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_budget, routes_categories, routes_personnel, routes_projects, routes_purchases
+from app.api import (
+    routes_budget,
+    routes_categories,
+    routes_drive,
+    routes_funding,
+    routes_personnel,
+    routes_projects,
+    routes_purchases,
+)
 from app.core.identity import DEV_MODE
 from app.db.session import create_db_and_tables
 
@@ -36,6 +44,8 @@ app.include_router(routes_categories.router)
 app.include_router(routes_budget.router)
 app.include_router(routes_purchases.router)
 app.include_router(routes_personnel.router)
+app.include_router(routes_funding.router)
+app.include_router(routes_drive.router)
 
 
 @app.get("/health")

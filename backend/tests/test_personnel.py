@@ -106,11 +106,11 @@ def test_closing_assignment_freezes_accrual_and_frees_committed_balance(client):
         headers=ADMIN,
     ).json()
     assert closed["status"] == "encerrado"
-    assert Decimal(closed["accrued_value"]) == Decimal("3000.00")
+    assert Decimal(closed["accrued_value"]) == Decimal("4000.00")  # jan, fev, mar, abr (regra da planilha)
     assert Decimal(closed["committed_future_value"]) == 0
 
     balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()
-    assert Decimal(balance[0]["executed"]) == Decimal("3000.00")
+    assert Decimal(balance[0]["executed"]) == Decimal("4000.00")
     assert Decimal(balance[0]["committed"]) == 0
 
 

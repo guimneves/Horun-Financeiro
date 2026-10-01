@@ -80,6 +80,7 @@ export function PurchaseProcessesPage() {
       {showNew && (
         <NewPurchaseProcessModal
           projectId={project.id}
+          blockOnExceed={project.balance_policy === 'bloquear'}
           onClose={() => setShowNew(false)}
           onCreated={() => {
             setShowNew(false)

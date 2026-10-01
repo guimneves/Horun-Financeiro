@@ -24,6 +24,8 @@ class ProjectOut(BaseModel):
     start_date: date | None
     end_date: date | None
     active_revision_id: int | None
+    drive_folder: str | None = None
+    balance_policy: str = "bloquear"
     my_role: str | None = None  # papel do usuário autenticado neste projeto
 
 
@@ -32,6 +34,8 @@ class ProjectUpdate(BaseModel):
     status: str | None = None
     start_date: date | None = None
     end_date: date | None = None
+    drive_folder: str | None = None  # relativa a MODULE_DRIVE_ROOT; "" remove
+    balance_policy: str | None = None  # bloquear | avisar
 
 
 class MembershipCreate(BaseModel):

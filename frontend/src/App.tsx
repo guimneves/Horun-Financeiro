@@ -10,6 +10,8 @@ import { PersonnelPage } from './routes/PersonnelPage'
 import { BudgetRevisionsPage } from './routes/BudgetRevisionsPage'
 import { BudgetRevisionEditorPage } from './routes/BudgetRevisionEditorPage'
 import { ProjectMembersPage } from './routes/ProjectMembersPage'
+import { DrivePage } from './routes/DrivePage'
+import { ProjectSettingsPage } from './routes/ProjectSettingsPage'
 
 export default function App() {
   return (
@@ -36,6 +38,8 @@ export default function App() {
             <Route path="revisions" element={<BudgetRevisionsPage />} />
             <Route path="revisions/:revisionId/edit" element={<BudgetRevisionEditorPage />} />
             <Route path="members" element={<ProjectMembersPage />} />
+            <Route path="drive" element={<DrivePage />} />
+            <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>
         </Routes>
 

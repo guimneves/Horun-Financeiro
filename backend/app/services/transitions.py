@@ -11,10 +11,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from app.core.identity import HorunIdentity
+from app.core.process_number import normalize_process_number
 from app.db.models.document import Document
 from app.db.models.purchase import PurchaseProcess
+from app.services.audit import record_event
 
 
 class TransitionError(Exception):
@@ -108,7 +112,13 @@ def apply_transition(
     vendor: str | None = None,
     process_number: str | None = None,
     final_value: Decimal | None = None,
+    actor: HorunIdentity | None = None,
+    override_reason: str | None = None,
 ) -> PurchaseProcess:
+    """`override_reason`: o coordenador pode avançar mesmo sem o documento que
+    o guard exige, desde que diga o porquê — a justificativa fica no histórico.
+    Só vale para o requisito de documento; estado errado ou falta de papel
+    continuam sendo recusados."""
     from datetime import datetime, timezone
 
     rule = TRANSITIONS.get(action)
@@ -125,16 +135,23 @@ def apply_transition(
         raise TransitionError("Informe o motivo.")
     if rule.requires_final_value and final_value is None:
         raise TransitionError("Informe o valor final da compra.")
+    overridden: str | None = None
     if rule.guard is not None:
-        rule.guard(session, process)
+        try:
+            rule.guard(session, process)
+        except TransitionError as exc:
+            if not (is_coordenador and override_reason):
+                raise
+            overridden = f"{exc} (liberado pelo coordenador: {override_reason})"
 
+    from_status = process.status
     now = datetime.now(timezone.utc)
 
     if action == "autorizar":
         if vendor is not None:
             process.vendor = vendor
         if process_number is not None:
-            process.process_number = process_number
+            process.process_number = normalize_process_number(process_number)
         # estimated_value NÃO é editável aqui de propósito — o valor
         # "comprometido" tem que continuar rastreável até quantity ×
         # estimated_unit_value (editáveis via PATCH antes da autorização),
@@ -150,6 +167,25 @@ def apply_transition(
     process.status = rule.to_state
     process.updated_at = now
     session.add(process)
-    session.commit()
+    record_event(
+        session,
+        project_id=process.project_id,
+        entity_type="purchase_process",
+        entity_id=process.id,
+        action=action,
+        actor=actor,
+        detail={
+            "de": from_status,
+            "para": rule.to_state,
+            "motivo": reason,
+            "valor_final": final_value,
+            "requisito_dispensado": overridden,
+        },
+    )
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise TransitionError("Já existe outro processo deste projeto com este nº de processo COPPETEC.") from exc
     session.refresh(process)
     return process

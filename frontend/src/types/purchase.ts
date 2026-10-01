@@ -25,7 +25,10 @@ export const TERMINAL_STATUSES = new Set(['concluido', 'rejeitado', 'cancelado']
 export const DOC_TYPE_LABELS: Record<string, string> = {
   cotacao: 'Cotação',
   solicitacao_autorizacao: 'Solicitação enviada à COPPETEC',
+  autorizacao_fornecimento: 'Autorização de fornecimento (AF)',
   nota_fiscal: 'Nota fiscal / recibo',
+  boleto: 'Boleto',
+  pedido_importacao: 'Pedido de importação',
   comprovante_recebimento: 'Comprovante de recebimento',
   recibo_pessoal: 'Recibo',
   outro: 'Outro',
@@ -46,6 +49,10 @@ export interface PurchaseProcess {
   status: string
   previous_attempt_id: number | null
   cancel_reason: string | null
+  origin: 'manual' | 'drive_import'
+  drive_rel_path: string | null
+  /** Avisos que não impediram a operação (ex.: acima do saldo, política "avisar") */
+  warnings: string[]
   created_by_username: string
   created_at: string
   updated_at: string
@@ -57,6 +64,8 @@ export interface PurchaseDocument {
   id: number
   doc_type: string
   original_filename: string
+  /** "drive" = arquivo que já está no drive; o programa só aponta para ele */
+  storage_kind: 'upload' | 'drive'
   content_type: string
   size_bytes: number
   period_label: string | null

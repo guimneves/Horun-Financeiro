@@ -46,9 +46,25 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
   }
 
   async function handleDelete(docId: number) {
-    await purchasesApi.deleteDocument(projectId, processId, docId)
-    load()
-    onChange?.()
+    setError(null)
+    try {
+      await purchasesApi.deleteDocument(projectId, processId, docId)
+      load()
+      onChange?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover documento.')
+    }
+  }
+
+  async function handleReclassify(docId: number, docType: string) {
+    setError(null)
+    try {
+      await purchasesApi.reclassifyDocument(projectId, processId, docId, docType)
+      load()
+      onChange?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao mudar o tipo do documento.')
+    }
   }
 
   if (docs === null) return <p style={{ color: 'var(--color-text-muted)' }}>Carregando documentos…</p>
@@ -57,22 +73,26 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
   for (const doc of docs) {
     byType.set(doc.doc_type, [...(byType.get(doc.doc_type) ?? []), doc])
   }
+  // Os tipos que aceitam envio sempre aparecem; os demais (AF, boleto, pedido de
+  // importação...) aparecem só quando há documento — vêm, em geral, do drive.
+  const shownTypes = [...UPLOADABLE_TYPES, ...[...byType.keys()].filter((t) => !UPLOADABLE_TYPES.includes(t))]
 
   return (
     <div>
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      {UPLOADABLE_TYPES.map((docType) => {
+      {shownTypes.map((docType) => {
         const items = byType.get(docType) ?? []
         const isQuote = docType === 'cotacao'
         const atQuoteLimit = isQuote && items.length >= 3
+        const canUploadThisType = UPLOADABLE_TYPES.includes(docType)
         return (
           <div key={docType} className="mb-4">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                {DOC_TYPE_LABELS[docType]}
+                {DOC_TYPE_LABELS[docType] ?? docType}
                 {isQuote && <span style={{ color: 'var(--color-text-muted)' }}> ({items.length}/3)</span>}
               </span>
-              {canUpload && !atQuoteLimit && (
+              {canUpload && canUploadThisType && !atQuoteLimit && (
                 <label className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
                   {uploadingType === docType ? 'Enviando…' : '+ Anexar arquivo'}
                   <input
@@ -97,25 +117,46 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
             ) : (
               <ul className="space-y-1">
                 {items.map((doc) => (
-                  <li key={doc.id} className="flex items-center justify-between text-sm">
-                    <a
-                      href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: 'var(--color-primary)' }}
-                    >
-                      {doc.original_filename}
-                    </a>
-                    <span className="flex items-center gap-2">
-                      <span style={{ color: 'var(--color-text-muted)' }}>{doc.uploaded_by_username}</span>
+                  <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      <a
+                        href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: 'var(--color-primary)' }}
+                        title={doc.original_filename}
+                      >
+                        {doc.original_filename}
+                      </a>
+                      {doc.storage_kind === 'drive' && (
+                        <span className="ml-1 text-xs" style={{ color: 'var(--color-text-muted)' }} title="Arquivo no drive do projeto">
+                          · drive
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <select
+                        aria-label="Tipo do documento"
+                        className="rounded border px-1 py-0.5 text-xs"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text-muted)' }}
+                        value={doc.doc_type}
+                        onChange={(e) => handleReclassify(doc.id, e.target.value)}
+                      >
+                        {Object.entries(DOC_TYPE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
                       {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDelete(doc.id)}
                           className="text-xs"
                           style={{ color: '#b91c1c' }}
+                          title={doc.storage_kind === 'drive' ? 'Só desfaz o vínculo; o arquivo do drive não é apagado' : undefined}
                         >
-                          remover
+                          {doc.storage_kind === 'drive' ? 'desvincular' : 'remover'}
                         </button>
                       )}
                     </span>

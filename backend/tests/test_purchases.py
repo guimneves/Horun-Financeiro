@@ -60,6 +60,47 @@ def test_creating_process_reserves_balance_as_committed(client):
     assert Decimal(balance[0]["balance"]) == Decimal("10000.00") - Decimal("1000.00")
 
 
+def test_creating_process_above_balance_is_blocked_with_clear_message(client):
+    project, item = _project_with_active_budget(client, unit_value="1000", planned_quantity="10")  # saldo 10.000
+    resp = client.post(
+        f"/projects/{project['id']}/purchase-processes",
+        json={"budget_position_id": item["position_id"], "title": "Caro", "quantity": "1", "estimated_unit_value": "10000.01"},
+        headers=ADMIN,
+    )
+    assert resp.status_code == 409
+    assert "Saldo insuficiente" in resp.json()["detail"]
+    assert "R$ 10.000,00" in resp.json()["detail"]  # disponível
+    assert "R$ 10.000,01" in resp.json()["detail"]  # solicitado
+    assert client.get(f"/projects/{project['id']}/purchase-processes", headers=ADMIN).json() == []
+
+
+def test_creating_process_exactly_at_balance_is_allowed(client):
+    project, item = _project_with_active_budget(client, unit_value="1000", planned_quantity="10")
+    process = _create_process(client, project, item, estimated_unit_value="10000", quantity="1")
+    assert process["status"] == "verificacao_orcamento"
+
+
+def test_second_process_is_blocked_by_first_one_commitment(client):
+    project, item = _project_with_active_budget(client, unit_value="1000", planned_quantity="10")
+    _create_process(client, project, item, estimated_unit_value="6000", quantity="1")
+    resp = client.post(
+        f"/projects/{project['id']}/purchase-processes",
+        json={"budget_position_id": item["position_id"], "title": "Outro", "quantity": "1", "estimated_unit_value": "4000.01"},
+        headers=ADMIN,
+    )
+    assert resp.status_code == 409  # só restam 4.000,00
+
+
+def test_raising_estimate_above_balance_is_blocked_but_lowering_is_not(client):
+    project, item = _project_with_active_budget(client, unit_value="1000", planned_quantity="10")
+    process = _create_process(client, project, item, estimated_unit_value="6000", quantity="1")
+    url = f"/projects/{project['id']}/purchase-processes/{process['id']}"
+
+    assert client.patch(url, json={"estimated_unit_value": "10000.01"}, headers=ADMIN).status_code == 409
+    assert client.patch(url, json={"estimated_unit_value": "10000"}, headers=ADMIN).status_code == 200
+    assert client.patch(url, json={"estimated_unit_value": "100"}, headers=ADMIN).status_code == 200
+
+
 def test_equipe_executora_rejected_from_purchase_flow(client):
     project, item = _project_with_active_budget(client, category="equipe_executora")
     resp = client.post(
@@ -133,15 +174,26 @@ def test_full_lifecycle_moves_committed_to_executed(client):
     _transition(client, project["id"], pid, "avancar_cotacao")
     _transition(client, project["id"], pid, "solicitar_autorizacao")
     _upload(client, project["id"], pid, "solicitacao_autorizacao")
+
+    balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()
+    # antes da autorização é só "comprometido"
+    assert Decimal(balance[0]["committed"]) == Decimal("1000.00")
+    assert Decimal(balance[0]["executed"]) == 0
+
     _transition(client, project["id"], pid, "autorizar", vendor="Fornecedor X")
+
+    balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()
+    # como na planilha: com nº de processo autorizado já é "realizado", pelo valor estimado
+    assert Decimal(balance[0]["committed"]) == 0
+    assert Decimal(balance[0]["executed"]) == Decimal("1000.00")
 
     _upload(client, project["id"], pid, "nota_fiscal")
     _transition(client, project["id"], pid, "emitir_nota_fiscal", final_value="980")
 
     balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()
-    # ainda não concluído — final_value só vira "realizado" depois de concluído
-    assert Decimal(balance[0]["committed"]) == Decimal("1000.00")
-    assert Decimal(balance[0]["executed"]) == 0
+    # com a nota fiscal, vale o valor final
+    assert Decimal(balance[0]["committed"]) == 0
+    assert Decimal(balance[0]["executed"]) == Decimal("980.00")
 
     _upload(client, project["id"], pid, "comprovante_recebimento")
     _transition(client, project["id"], pid, "confirmar_recebimento")

@@ -80,6 +80,7 @@ class ItemBalanceOut(BaseModel):
     committed: Decimal
     executed: Decimal
     balance: Decimal
+    available_quantity: Decimal | None = None
 
 
 class CategorySummaryOut(BaseModel):

@@ -131,14 +131,14 @@ def test_colaborador_cannot_edit_process_after_authorization(client):
 
     resp = client.patch(
         f"/projects/{project['id']}/purchase-processes/{process['id']}",
-        json={"estimated_unit_value": "9999"},
+        json={"estimated_unit_value": "100"},
         headers=COLAB,
     )
     assert resp.status_code == 403
 
     resp = client.patch(
         f"/projects/{project['id']}/purchase-processes/{process['id']}",
-        json={"estimated_unit_value": "9999"},
+        json={"estimated_unit_value": "100"},
         headers=ADMIN,
     )
     assert resp.status_code == 200

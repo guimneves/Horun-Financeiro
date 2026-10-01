@@ -19,6 +19,8 @@ export interface TransitionInput {
   process_number?: string
   estimated_value?: string
   final_value?: string
+  /** Só coordenador: avança mesmo sem o documento exigido, justificando (fica no histórico) */
+  override_reason?: string
 }
 
 export const purchasesApi = {
@@ -31,6 +33,10 @@ export const purchasesApi = {
     api.post<PurchaseProcess>(`/projects/${projectId}/purchase-processes/${processId}/transition`, body),
   documents: (projectId: number, processId: number) =>
     api.get<PurchaseDocument[]>(`/projects/${projectId}/purchase-processes/${processId}/documents`),
+  reclassifyDocument: (projectId: number, processId: number, docId: number, docType: string) =>
+    api.patch<PurchaseDocument>(`/projects/${projectId}/purchase-processes/${processId}/documents/${docId}`, {
+      doc_type: docType,
+    }),
   deleteDocument: (projectId: number, processId: number, docId: number) =>
     api.delete<void>(`/projects/${projectId}/purchase-processes/${processId}/documents/${docId}`),
   downloadUrl: (projectId: number, processId: number, docId: number) =>

@@ -10,8 +10,10 @@ deploy (inofensivo em SQLite dev, essencial em Postgres produção).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Generator
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.config import settings
@@ -24,6 +26,11 @@ from app.db.models import budget as _budget_models  # noqa: F401
 from app.db.models import purchase as _purchase_models  # noqa: F401
 from app.db.models import personnel as _personnel_models  # noqa: F401
 from app.db.models import document as _document_models  # noqa: F401
+from app.db.models import audit as _audit_models  # noqa: F401
+from app.db.models import funding as _funding_models  # noqa: F401
+from app.db.models import agent as _agent_models  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 engine = create_engine(
     settings.database_url,
@@ -42,12 +49,27 @@ def _ensure_column(table: str, column: str, ddl_type: str) -> None:
         conn.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {column} {ddl_type}')
 
 
+def _ensure_unique_index(name: str, table: str, columns: str) -> None:
+    # Se já houver dados duplicados num banco antigo, o índice não pode ser
+    # criado — avisa em vez de impedir o módulo de subir.
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON "{table}" ({columns})')
+    except SQLAlchemyError:
+        logger.warning("Não foi possível criar o índice único %s (dados duplicados?).", name)
+
+
 def _run_migrations() -> None:
-    # Nenhuma coluna pós-lançamento ainda — primeira versão do módulo.
     # Ao adicionar um campo num modelo que já tem tabela em produção, somar
     # aqui uma chamada de _ensure_column (mesmo padrão do Core), no mesmo
     # commit que muda o modelo.
-    pass
+    _ensure_column("project", "drive_folder", "VARCHAR")
+    _ensure_column("project", "balance_policy", "VARCHAR DEFAULT 'bloquear'")
+    _ensure_column("document", "storage_kind", "VARCHAR DEFAULT 'upload'")
+    _ensure_column("document", "sha256", "VARCHAR")
+    _ensure_column("purchaseprocess", "origin", "VARCHAR DEFAULT 'manual'")
+    _ensure_column("purchaseprocess", "drive_rel_path", "VARCHAR")
+    _ensure_unique_index("uq_process_project_number", "purchaseprocess", "project_id, process_number")
 
 
 def create_db_and_tables() -> None:
