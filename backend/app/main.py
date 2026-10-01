@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -23,6 +24,11 @@ from app.db.session import create_db_and_tables
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    if DEV_MODE:
+        logging.getLogger("uvicorn.error").warning(
+            "HORUN_DEV_MODE=true: toda requisição é tratada como o usuário 'admin', SEM login. "
+            "Use só em desenvolvimento e nunca exponha esta porta na rede."
+        )
     create_db_and_tables()
     yield
 

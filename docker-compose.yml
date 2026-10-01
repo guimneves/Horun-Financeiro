@@ -1,7 +1,7 @@
 # Compose para desenvolvimento/teste standalone deste módulo (sem o Horun
 # Core). Quando o módulo for "plugado" na plataforma de verdade, ele passa
 # a entrar na rede `horun-network` (criada pelo Core — ver
-# Prompt_Fase2.md, seção 2.1) e ganha `container_name`s previsíveis, sem
+# Prompt_Horun_Core.md, seção 9.2) e ganha `container_name`s previsíveis, sem
 # porta exposta ao host — ver Prompt_Horun_Core.md, seção 8, para o
 # encaixe da interface, e o exemplo real em `RE7S-Horun/docker-compose.yml`.
 
@@ -9,9 +9,13 @@ services:
   backend:
     build: ./backend
     environment:
+      # DEV_MODE = todo pedido é o usuário "admin" fixo, sem login. Por isso
+      # as portas abaixo só escutam na própria máquina (127.0.0.1): publicar
+      # em 0.0.0.0 entregaria a API inteira, como admin, a qualquer PC da
+      # rede do laboratório.
       HORUN_DEV_MODE: "true"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:
@@ -21,4 +25,4 @@ services:
         # "/m/financeiro/" (ver Prompt_Horun_Modulo.md, seção 6).
         VITE_BASE: /
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
