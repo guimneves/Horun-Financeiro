@@ -22,14 +22,19 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 - Mudança de esquema: novo campo em modelo com tabela existente → somar
   `_ensure_column` em `backend/app/db/session.py` **no mesmo commit** (padrão do
   Horun Core; Alembic não é usado).
-- Valores monetários: `Decimal` / `Numeric(14,2)`, nunca float.
+- Valores monetários: `Decimal` / `Numeric(14,2)`, nunca float. Na entrada da API,
+  usar os tipos de `app/core/money.py` (`Money`, `PositiveQuantity`...) e
+  `round_money` em todo valor calculado; campo obrigatório em PATCH ganha
+  `reject_null`.
+- Toda rota da API fica sob `/api` (prefixo aplicado em `main.py`) — é o que o
+  gateway do Core usa para separar API de estáticos.
 - Caminhos do drive passam por `core/drive.py` (`join_rel`/`safe_join`/`fs_path`);
   no Windows os caminhos reais passam de 260 caracteres.
 
 ## Comandos
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q        # master: 96 passam
+cd backend && .venv/Scripts/python -m pytest -q        # master: 134 passam
 cd frontend && npx tsc -b && npx oxlint
 ```
 

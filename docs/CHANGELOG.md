@@ -9,8 +9,34 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 96 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 134 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
+
+---
+
+## 01/10/2026 — Correções da revisão de código (em `master`)
+
+Revisão dos repositórios do Horun; os achados mais urgentes deste módulo:
+
+- **Encaixe no Core**: toda a API passou para `/api/...` (`main.py`); o
+  frontend usa um `API_BASE` único com `/api` (`api/client.ts`). Antes, plugado
+  no Core, as chamadas caíam no frontend e voltavam `index.html`. `/health`
+  continua na raiz.
+- **Drive**: `safe_join` recusa `:` em qualquer segmento (no Windows,
+  `pasta/D:/x` trocava de unidade e saía da pasta do projeto) e confere o
+  resultado por `commonpath`; a pasta do projeto não pode ser a raiz do drive
+  (`.`), que daria acesso aos documentos de todos os projetos.
+- **Valores**: `app/core/money.py` — dinheiro `>= 0`, quantidade de compra
+  `> 0`, máximo 2 casas (igual a `Numeric(14,2)`); valor calculado arredondado
+  para centavos. Quantidade negativa liberava saldo bloqueado. `null` explícito
+  em PATCH de campo obrigatório dava 500, agora 422. Erros 422 viram uma frase
+  em português no `detail`.
+- **Upload de pessoal**: limite de tamanho, sha256, evento de auditoria e
+  bloqueio em atribuição encerrada (como o de compras).
+- **Compose de desenvolvimento**: portas em `127.0.0.1` (o modo dev é "admin
+  sem login"); aviso no log quando `HORUN_DEV_MODE` está ligado; healthcheck do
+  frontend em `127.0.0.1`.
+- 38 testes novos (134 no total).
 
 ---
 

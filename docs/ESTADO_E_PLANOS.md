@@ -109,9 +109,10 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. 96 testes do backend passam; frontend compila e passa
-  no lint. Tem paridade com a planilha, correção da base e leitura de pastas
-  (modo local). Ver CHANGELOG.
+- **`master`**: estável. 134 testes do backend passam; frontend compila e passa
+  no lint. Tem paridade com a planilha, correção da base, leitura de pastas
+  (modo local) e as correções da revisão de 01/10 (API sob `/api`, drive,
+  valores, upload de pessoal, portas do modo dev). Ver CHANGELOG.
 - **`wip/drive-agent`**: master + modo agente em andamento; **a suíte não importa**
   até terminar a religação (seção 7).
 - Nada disso foi testado em produção; não há deploy.
@@ -209,6 +210,22 @@ agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias
 - Equipe Executora: importação de pessoal a partir das planilhas/pastas ainda não
   feita.
 - Alembic × `_ensure_column` (decidir com o Core).
+- **Trabalho de 27–28/09 fora do `master`**: senha mestra de coordenador,
+  página Organização, diretório próprio de usuários, "Ver como" (dev) e nº de
+  processo COPPETEC por item foram feitos numa outra cópia local, a partir de
+  `98ea7d4`, e nunca entraram aqui. Salvos na branch
+  **`backup/coordenador-0928`**. Decidir o que integrar (vai conflitar com
+  `c255f67` e com as correções de 01/10).
+- **Build Docker do frontend**: `package.json` aponta o design-system para
+  `file:../../Horun Core/design-system`, fora do contexto de build
+  (`./frontend`) — `docker compose build` falha fora da máquina de
+  desenvolvimento. Decidir: contexto de build na pasta-mãe, ou design-system
+  publicado como pacote/tarball versionado (decisão do Core).
+- **`wip/drive-agent`** precisa ser atualizada com o `master`: as rotas do
+  agente passam a ficar sob `/api` automaticamente (laço em `main.py`); o
+  agente tem que usar a URL com `/api`.
+- Nota fiscal acima do saldo: hoje grava sem aviso (o `final_value` não passa
+  por `_balance_warnings`). Avisar? (relacionado ao item "não bloqueiam" acima)
 
 ## 9. Plano (ordem sugerida)
 
