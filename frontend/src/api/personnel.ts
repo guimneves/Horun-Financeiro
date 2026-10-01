@@ -1,8 +1,6 @@
-import { api, ApiError } from './client'
+import { api, API_BASE, ApiError } from './client'
 import type { PurchaseDocument } from '../types/purchase'
 import type { Person, PersonnelAssignment } from '../types/personnel'
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export interface AssignmentCreateInput {
   person_id: number

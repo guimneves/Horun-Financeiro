@@ -37,4 +37,7 @@ def _fresh_db():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # base_url com /api/: os testes escrevem "/projects/..." e o httpx junta
+    # com o prefixo real da API (main.py). Para bater na raiz (ex. /health),
+    # use uma URL absoluta: client.get("http://testserver/health").
+    return TestClient(app, base_url="http://testserver/api/")

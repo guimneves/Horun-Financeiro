@@ -1,7 +1,5 @@
-import { api } from './client'
+import { api, API_BASE } from './client'
 import type { DriveBrowse, DriveStatus, ScanReport, SyncResult } from '../types/drive'
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export const driveApi = {
   status: (projectId: number) => api.get<DriveStatus>(`/projects/${projectId}/drive/status`),

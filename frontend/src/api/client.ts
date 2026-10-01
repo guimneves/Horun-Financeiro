@@ -2,10 +2,10 @@
 // /m/<id>/ — a identidade chega ao backend via cabeçalho injetado pelo
 // gateway, nunca pelo frontend (Prompt_Horun_Modulo.md, seção 6). Em
 // desenvolvimento standalone, o frontend fala direto com o backend na
-// porta 8000 (padrão do contrato de módulo).
-const API_BASE = import.meta.env.DEV
-  ? 'http://localhost:8000'
-  : import.meta.env.BASE_URL.replace(/\/$/, '')
+// porta 8000 (padrão do contrato de módulo). Toda rota da API fica sob
+// /api — é o que o gateway do Core usa pra separar API de estáticos.
+export const API_BASE =
+  (import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')) + '/api'
 
 export class ApiError extends Error {
   status: number

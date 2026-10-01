@@ -1,7 +1,5 @@
-import { api, ApiError } from './client'
+import { api, API_BASE, ApiError } from './client'
 import type { PurchaseDocument, PurchaseProcess, TransitionAction } from '../types/purchase'
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export interface PurchaseProcessCreateInput {
   budget_position_id: number

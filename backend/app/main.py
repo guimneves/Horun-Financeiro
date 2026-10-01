@@ -39,13 +39,21 @@ if DEV_MODE:
         allow_headers=["*"],
     )
 
-app.include_router(routes_projects.router)
-app.include_router(routes_categories.router)
-app.include_router(routes_budget.router)
-app.include_router(routes_purchases.router)
-app.include_router(routes_personnel.router)
-app.include_router(routes_funding.router)
-app.include_router(routes_drive.router)
+# Toda a API vive sob /api: plugado no Core, o gateway só encaminha pro
+# backend o que começa com `/m/financeiro/api/...` — o resto vai pro
+# frontend (Prompt_Horun_Modulo.md, seção 6). Sem o prefixo, a SPA recebia
+# index.html no lugar do JSON. `/health` fica fora, na raiz (contrato).
+API_ROUTERS = (
+    routes_projects.router,
+    routes_categories.router,
+    routes_budget.router,
+    routes_purchases.router,
+    routes_personnel.router,
+    routes_funding.router,
+    routes_drive.router,
+)
+for _router in API_ROUTERS:
+    app.include_router(_router, prefix="/api")
 
 
 @app.get("/health")
