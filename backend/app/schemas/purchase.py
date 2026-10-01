@@ -3,14 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.money import Money, PositiveQuantity, reject_null
 
 
 class PurchaseProcessCreate(BaseModel):
     budget_position_id: int
     title: str
-    quantity: Decimal
-    estimated_unit_value: Decimal
+    quantity: PositiveQuantity
+    estimated_unit_value: Money
     vendor: str | None = None
     previous_attempt_id: int | None = None
     asset_registration_flag: bool = False
@@ -19,10 +21,13 @@ class PurchaseProcessCreate(BaseModel):
 class PurchaseProcessUpdate(BaseModel):
     title: str | None = None
     vendor: str | None = None
-    quantity: Decimal | None = None
-    estimated_unit_value: Decimal | None = None
+    quantity: PositiveQuantity | None = None
+    estimated_unit_value: Money | None = None
     process_number: str | None = None
     asset_registration_flag: bool | None = None
+
+    # vendor/process_number podem ser limpos com null; estes, não.
+    _not_null = field_validator("title", "quantity", "estimated_unit_value", "asset_registration_flag")(reject_null)
 
 
 class PurchaseProcessOut(BaseModel):
@@ -57,7 +62,7 @@ class TransitionRequest(BaseModel):
     reason: str | None = None
     vendor: str | None = None
     process_number: str | None = None
-    final_value: Decimal | None = None
+    final_value: Money | None = None
     # Só coordenador: avança mesmo sem o documento exigido, justificando.
     override_reason: str | None = None
 

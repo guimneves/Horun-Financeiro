@@ -14,6 +14,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.money import round_money
 from app.core.permissions import get_membership, require_coordenador
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition, BudgetRevision
 from app.db.models.project import Project, ProjectMembership
@@ -211,7 +212,7 @@ def create_item(
         session.commit()
         session.refresh(position)
 
-    planned_value = body.unit_value * body.planned_quantity
+    planned_value = round_money(body.unit_value * body.planned_quantity)
     item = BudgetItem(
         revision_id=revision_id,
         position_id=position.id,
@@ -247,7 +248,7 @@ def update_item(
 
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
-    item.planned_value = item.unit_value * item.planned_quantity
+    item.planned_value = round_money(item.unit_value * item.planned_quantity)
     session.add(item)
     session.commit()
     session.refresh(item)

@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import (
     routes_budget,
@@ -26,6 +28,44 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Horun · Financeiro", version="0.1.0", lifespan=lifespan)
+
+# Erro de validação (422) como UMA frase em português no `detail` — o padrão
+# do FastAPI é uma lista de objetos em inglês, que o frontend (api/client.ts,
+# que mostra `detail` direto) exibia como "[object Object]".
+_VALIDATION_MESSAGES = {
+    "greater_than_equal": "não pode ser negativo",
+    "greater_than": "tem que ser maior que zero",
+    "decimal_max_places": "aceita no máximo 2 casas decimais",
+    "decimal_max_digits": "é grande demais",
+    "decimal_parsing": "não é um número válido",
+    "missing": "é obrigatório",
+}
+_FIELD_LABELS = {
+    "quantity": "Quantidade",
+    "estimated_unit_value": "Valor unitário",
+    "unit_value": "Valor unitário",
+    "planned_quantity": "Quantidade prevista",
+    "monthly_rate": "Valor mensal",
+    "final_value": "Valor final",
+    "amount": "Valor",
+    "title": "Título",
+    "description": "Descrição",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_pt(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    messages = []
+    for err in exc.errors():
+        field = str(err["loc"][-1]) if err.get("loc") else "valor"
+        label = _FIELD_LABELS.get(field, field)
+        if err["type"] == "value_error":
+            # nossos validadores (ex. reject_null) já falam português
+            text = str(err.get("ctx", {}).get("error", err["msg"]))
+        else:
+            text = _VALIDATION_MESSAGES.get(err["type"], "é inválido")
+        messages.append(f"{label}: {text}.")
+    return JSONResponse(status_code=422, content={"detail": " ".join(messages) or "Dados inválidos."})
 
 if DEV_MODE:
     # Só em desenvolvimento standalone: o frontend (Vite, porta 5173) e o

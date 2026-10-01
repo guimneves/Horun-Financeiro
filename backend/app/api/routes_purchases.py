@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.drive import DriveError
 from app.core.files import delete_file, resolve_document_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
+from app.core.money import round_money
 from app.core.permissions import get_membership
 from app.core.process_number import normalize_process_number
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
@@ -129,7 +130,7 @@ def create_process(
                 "Só é possível referenciar uma tentativa cancelada ou rejeitada.",
             )
 
-    estimated_value = body.quantity * body.estimated_unit_value
+    estimated_value = round_money(body.quantity * body.estimated_unit_value)
     warnings = _balance_warnings(session, project_id, position.id, estimated_value)
 
     process = PurchaseProcess(
@@ -207,8 +208,9 @@ def update_process(
 
     warnings: list[str] = []
     if "quantity" in data or "estimated_unit_value" in data:
-        new_estimated = data.get("quantity", process.quantity) * data.get(
-            "estimated_unit_value", process.estimated_unit_value
+        new_estimated = round_money(
+            data.get("quantity", process.quantity)
+            * data.get("estimated_unit_value", process.estimated_unit_value)
         )
         # Com valor final (nota fiscal) já lançado, o saldo usa ele — editar a
         # estimativa não muda mais nada, então não há o que checar.
@@ -226,7 +228,7 @@ def update_process(
     for field, value in data.items():
         setattr(process, field, value)
     if "quantity" in data or "estimated_unit_value" in data:
-        process.estimated_value = process.quantity * process.estimated_unit_value
+        process.estimated_value = round_money(process.quantity * process.estimated_unit_value)
     session.add(process)
     if changes:
         record_event(

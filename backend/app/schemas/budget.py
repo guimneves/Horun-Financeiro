@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.money import Money, NonNegativeQuantity, reject_null
 
 
 class CategoryOut(BaseModel):
@@ -35,17 +37,19 @@ class BudgetItemCreate(BaseModel):
     item_number: int
     description: str
     justification: str = ""
-    unit_value: Decimal
-    planned_quantity: Decimal
+    unit_value: Money
+    planned_quantity: NonNegativeQuantity
     note: str = ""
 
 
 class BudgetItemUpdate(BaseModel):
     description: str | None = None
     justification: str | None = None
-    unit_value: Decimal | None = None
-    planned_quantity: Decimal | None = None
+    unit_value: Money | None = None
+    planned_quantity: NonNegativeQuantity | None = None
     note: str | None = None
+
+    _not_null = field_validator("description", "justification", "unit_value", "planned_quantity", "note")(reject_null)
 
 
 class YieldUpdate(BaseModel):

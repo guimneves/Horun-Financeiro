@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.money import Money, reject_null
 
 
 class PersonCreate(BaseModel):
@@ -22,14 +24,16 @@ class AssignmentCreate(BaseModel):
     person_id: int
     budget_position_id: int
     role_title: str
-    monthly_rate: Decimal
+    monthly_rate: Money
     start_date: date
 
 
 class AssignmentUpdate(BaseModel):
     role_title: str | None = None
-    monthly_rate: Decimal | None = None
+    monthly_rate: Money | None = None
     start_date: date | None = None
+
+    _not_null = field_validator("role_title", "monthly_rate", "start_date")(reject_null)
 
 
 class AssignmentOut(BaseModel):
