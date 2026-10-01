@@ -4,7 +4,6 @@ entrada — ver services/transitions.py) e documentos anexados.
 
 from __future__ import annotations
 
-import hashlib
 import os
 from decimal import Decimal
 
@@ -15,7 +14,7 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.drive import DriveError
-from app.core.files import delete_file, resolve_document_path, save_upload
+from app.core.files import delete_file, read_upload_limited, resolve_document_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.money import round_money
 from app.core.permissions import get_membership
@@ -299,25 +298,6 @@ def list_documents(
     return [_doc_out(d) for d in docs]
 
 
-async def _read_limited(file: UploadFile) -> tuple[bytes, str]:
-    """Lê o upload em pedaços, recusando acima do limite (sem carregar um
-    arquivo gigante inteiro na memória) e calculando o hash."""
-    max_bytes = settings.max_upload_mb * 1024 * 1024
-    digest = hashlib.sha256()
-    chunks: list[bytes] = []
-    total = 0
-    while chunk := await file.read(1024 * 1024):
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(
-                status.HTTP_413_CONTENT_TOO_LARGE,
-                f"Arquivo acima do limite de {settings.max_upload_mb} MB.",
-            )
-        digest.update(chunk)
-        chunks.append(chunk)
-    return b"".join(chunks), digest.hexdigest()
-
-
 @router.post("/{process_id}/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     project_id: int,
@@ -345,7 +325,7 @@ async def upload_document(
                 status.HTTP_409_CONFLICT, f"Máximo de {MAX_QUOTES_PER_PROCESS} cotações por processo."
             )
 
-    content, sha256 = await _read_limited(file)
+    content, sha256 = await read_upload_limited(file)
     storage_path, size = save_upload(project_id, "purchases", process_id, file.filename or "arquivo", content)
     document = Document(
         purchase_process_id=process_id,

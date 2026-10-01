@@ -11,8 +11,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from pathlib import Path
+
+from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import settings
 from app.core.drive import fs_path, project_drive_dir, safe_join
@@ -20,6 +23,25 @@ from app.db.models.document import Document
 from app.db.models.project import Project
 
 UPLOAD_ROOT = Path(settings.upload_root).resolve()
+
+
+async def read_upload_limited(file: UploadFile) -> tuple[bytes, str]:
+    """Lê o upload em pedaços, recusando acima do limite (sem carregar um
+    arquivo gigante inteiro na memória) e calculando o hash."""
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    digest = hashlib.sha256()
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                f"Arquivo acima do limite de {settings.max_upload_mb} MB.",
+            )
+        digest.update(chunk)
+        chunks.append(chunk)
+    return b"".join(chunks), digest.hexdigest()
 
 
 def save_upload(project_id: int, owner_kind: str, owner_id: int, filename: str, content: bytes) -> tuple[str, int]:

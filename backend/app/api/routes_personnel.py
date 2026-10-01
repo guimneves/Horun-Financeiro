@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
-from app.core.files import delete_file, resolve_path, save_upload
+from app.core.files import delete_file, read_upload_limited, resolve_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
@@ -28,6 +28,7 @@ from app.schemas.personnel import (
     PersonOut,
 )
 from app.services.accrual import compute_accrual
+from app.services.audit import record_event
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["personnel"])
 
@@ -230,14 +231,21 @@ async def upload_assignment_document(
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
-    _get_assignment(session, project_id, assignment_id)
-    content = await file.read()
+    assignment = _get_assignment(session, project_id, assignment_id)
+    # Mesma disciplina do upload de compras: atribuição encerrada fica
+    # congelada (o delete já recusava), tamanho limitado sem carregar tudo na
+    # memória, hash e evento de auditoria — é recibo de pagamento de pessoa.
+    if assignment.status == "encerrado":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Atribuição encerrada não aceita novos documentos.")
+    content, sha256 = await read_upload_limited(file)
     storage_path, size = save_upload(project_id, "personnel", assignment_id, file.filename or "arquivo", content)
     document = Document(
         personnel_assignment_id=assignment_id,
         doc_type="recibo_pessoal",
         original_filename=file.filename or "arquivo",
         storage_path=storage_path,
+        storage_kind="upload",
+        sha256=sha256,
         content_type=file.content_type or "application/octet-stream",
         size_bytes=size,
         period_label=period_label,
@@ -246,6 +254,16 @@ async def upload_assignment_document(
         uploaded_by_username=identity.username,
     )
     session.add(document)
+    session.flush()
+    record_event(
+        session,
+        project_id=project_id,
+        entity_type="personnel_assignment",
+        entity_id=assignment_id,
+        action="documento_enviado",
+        actor=identity,
+        detail={"documento_id": document.id, "arquivo": document.original_filename, "sha256": sha256},
+    )
     session.commit()
     session.refresh(document)
     return _doc_out(document)
