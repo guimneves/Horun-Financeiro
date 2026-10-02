@@ -11,6 +11,8 @@ const primaryButton = { background: 'var(--color-primary)', color: 'var(--color-
 export function ProjectSettingsPage() {
   const { project, reloadProject } = useOutletContext<ProjectContext>()
   const [driveFolder, setDriveFolder] = useState(project.drive_folder ?? '')
+  const [startDate, setStartDate] = useState(project.start_date ?? '')
+  const [endDate, setEndDate] = useState(project.end_date ?? '')
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [installments, setInstallments] = useState<InstallmentInput[] | null>(null)
 
@@ -49,6 +51,38 @@ export function ProjectSettingsPage() {
           {message.text}
         </p>
       )}
+
+      <section className="mb-6 rounded-lg border p-4" style={card}>
+        <h3 className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+          Vigência do projeto
+        </h3>
+        <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Início e fim do projeto — o Resumo compara o % do orçamento executado com o % do prazo já decorrido.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Início
+            <input type="date" className="mt-1 block rounded-md border px-3 py-2 text-sm" style={input} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Fim
+            <input type="date" className="mt-1 block rounded-md border px-3 py-2 text-sm" style={input} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="rounded-md px-4 py-2 text-sm font-medium"
+            style={primaryButton}
+            onClick={() =>
+              save(
+                () => projectsApi.update(project.id, { start_date: startDate || null, end_date: endDate || null }),
+                'Vigência salva.',
+              )
+            }
+          >
+            Salvar
+          </button>
+        </div>
+      </section>
 
       <section className="mb-6 rounded-lg border p-4" style={card}>
         <h3 className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>

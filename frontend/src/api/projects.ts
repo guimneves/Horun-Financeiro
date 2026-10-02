@@ -19,6 +19,8 @@ export interface MembershipCreateInput {
 export interface ProjectUpdateInput {
   drive_folder?: string
   balance_policy?: 'bloquear' | 'avisar'
+  start_date?: string | null
+  end_date?: string | null
 }
 
 export interface ProjectCreateInput {

@@ -9,10 +9,32 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 187 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 192 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Novo Resumo, com gráficos
+
+- **Aba Resumo** refeita (`GET /api/projects/{id}/dashboard`,
+  `services/dashboard.py`): indicadores (orçamento + rendimentos, realizado,
+  comprometido, % do prazo decorrido × % executado); "Uso do orçamento por
+  categoria" (barras empilhadas realizado / comprometido / saldo / estouro,
+  Recharts 2.15.4); o Quadro Resumo da planilha em tabela (Capital e
+  Correntes com subtotais, link para os itens da categoria); parcelas
+  recebidas × usadas; "Precisa de atenção" (saldo negativo, item acima de
+  90%, compra parada há 30+ dias antes da autorização, processo sem valor).
+  Colaborador vê o mesmo painel em percentuais, sem R$.
+- Configurações: vigência do projeto (início e fim), para o % do prazo.
+- Orçamento aceita `?category=` (só uma categoria) — usado pelos links do Resumo.
+- Saem `OverviewSection` e `CategorySummaryCard` (substituídos).
+- **Achados ao conferir com a planilha real** (ainda não corrigidos): a
+  leitura das abas de lançamento descarta, sem avisar, linhas sem nº de
+  processo COPPETEC (quase todas de Passagens, Diárias e Outras Despesas —
+  DOA, ressarcimentos, agência de viagem); e a sincronização põe cada
+  processo no item da PASTA, enquanto a planilha usa a coluna "Nº do Item"
+  — os totais por categoria batem, os itens não (daí saldos negativos
+  falsos em itens).
 
 ## 02/10/2026 — Importar a Equipe Executora da planilha
 

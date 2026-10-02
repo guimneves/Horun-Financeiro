@@ -13,6 +13,7 @@ from app.api import (
     routes_auth,
     routes_budget,
     routes_categories,
+    routes_dashboard,
     routes_drive,
     routes_funding,
     routes_known_users,
@@ -109,6 +110,7 @@ API_ROUTERS = (
     routes_purchases.router,
     routes_personnel.router,
     routes_funding.router,
+    routes_dashboard.router,
     routes_drive.router,
     routes_known_users.router,
 )
