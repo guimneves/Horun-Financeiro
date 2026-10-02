@@ -50,7 +50,8 @@ export interface PurchaseProcess {
   status: string
   previous_attempt_id: number | null
   cancel_reason: string | null
-  origin: 'manual' | 'drive_import'
+  origin: 'manual' | 'drive_import' | 'planilha_sem_numero'
+  realized_on: string | null
   drive_rel_path: string | null
   /** Avisos que não impediram a operação (ex.: acima do saldo, política "avisar") */
   warnings: string[]

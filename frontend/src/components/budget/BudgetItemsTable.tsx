@@ -59,7 +59,11 @@ export function BudgetItemsTable({
                         : 'var(--color-text-muted)',
                   }}
                 >
-                  {item.available_quantity === null ? '—' : `${Number(item.available_quantity)} / ${Number(item.planned_quantity)}`}
+                  {item.available_quantity !== null
+                    ? `${Number(item.available_quantity)} / ${Number(item.planned_quantity)}`
+                    : item.category === 'equipe_executora'
+                      ? '—'
+                      : <span title="Item de quantidade 1 gasto em várias compras: vale o saldo em R$">verba</span>}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <MoneyValue value={item.planned_value} />

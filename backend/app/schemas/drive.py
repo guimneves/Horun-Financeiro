@@ -8,7 +8,8 @@ from pydantic import BaseModel
 class DriveScanRequest(BaseModel):
     # Planilha de acompanhamento com os valores, RELATIVA à pasta do projeto
     # (ex. "0_Saldo por item/NOVA 25465 Acompanhamento de saldo_reformulação.xlsx").
-    # Sem ela, os processos entram com valor zero.
+    # Vazia: usa a única .xlsx da pasta "... Saldo por item" do projeto, se houver.
+    # Sem planilha, os processos entram com valor zero.
     ledger_path: str | None = None
 
 
@@ -20,7 +21,9 @@ class ProcessPlanOut(BaseModel):
     title: str
     cancelled: bool
     inferred_status: str
-    action: str  # criar | existe | sem_item_no_orcamento | duplicado_na_pasta
+    # criar | criar_da_planilha | criar_sem_numero | existe | preencher_valor |
+    # sem_item_no_orcamento | duplicado_na_pasta
+    action: str
     value: Decimal
     quantity: Decimal
     vendor: str | None
@@ -38,10 +41,12 @@ class ScanReportOut(BaseModel):
     duplicate_numbers: list[str]
     ledger_skipped: list[str]
     ledger_unused: list[str]
+    ledger_path: str | None = None  # planilha usada (informada ou achada em "0_Saldo por item")
 
 
 class SyncResultOut(BaseModel):
     processos_criados: int
+    valores_preenchidos: int = 0  # processos que estavam com R$ 0 e receberam o valor da planilha
     arquivos_vinculados: int
     summary: dict[str, int]  # o plano que foi aplicado
 

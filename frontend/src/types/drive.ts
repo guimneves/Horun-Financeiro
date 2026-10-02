@@ -26,10 +26,12 @@ export interface ScanReport {
   duplicate_numbers: string[]
   ledger_skipped: string[]
   ledger_unused: string[]
+  ledger_path: string | null
 }
 
 export interface SyncResult {
   processos_criados: number
+  valores_preenchidos: number
   arquivos_vinculados: number
   summary: Record<string, number>
 }

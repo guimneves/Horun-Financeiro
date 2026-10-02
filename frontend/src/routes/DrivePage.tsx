@@ -10,6 +10,8 @@ import type { ProjectContext } from './ProjectLayout'
 const ACTION_LABELS: Record<string, string> = {
   criar: 'Criar',
   criar_da_planilha: 'Criar (só na planilha)',
+  criar_sem_numero: 'Criar (lançamento sem nº)',
+  preencher_valor: 'Preencher valor',
   existe: 'Já existe',
   sem_item_no_orcamento: 'Item fora do orçamento',
   duplicado_na_pasta: 'Duplicado na pasta',
@@ -19,6 +21,8 @@ const SUMMARY_LABELS: [string, string][] = [
   ['processos_na_pasta', 'Processos nas pastas'],
   ['a_criar', 'A criar (com pasta)'],
   ['a_criar_so_planilha', 'A criar (só na planilha)'],
+  ['a_criar_sem_numero', 'Lançamentos sem nº de processo'],
+  ['valores_a_preencher', 'Valores a preencher'],
   ['ja_existentes', 'Já existentes'],
   ['sem_item_no_orcamento', 'Item fora do orçamento'],
   ['arquivos_novos', 'Arquivos a vincular'],
@@ -28,6 +32,10 @@ const SUMMARY_LABELS: [string, string][] = [
 
 const fileSize = (bytes: number | null) =>
   bytes === null ? '' : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+// processos a criar + processos que já existem com R$ 0 e recebem o valor
+const pending = (s: Record<string, number>) =>
+  (s.a_criar ?? 0) + (s.a_criar_so_planilha ?? 0) + (s.a_criar_sem_numero ?? 0) + (s.valores_a_preencher ?? 0)
 
 const card = { borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }
 const input = { borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }
@@ -92,7 +100,7 @@ function SyncPanel({ projectId }: { projectId: number }) {
       const scanned = await driveApi.scan(projectId, ledgerPath.trim())
       setReport(scanned)
       // Se não há nada a criar, mostra tudo — uma lista vazia parece que deu errado.
-      setFilter(scanned.summary.a_criar + scanned.summary.a_criar_so_planilha > 0 ? 'criar' : 'todos')
+      setFilter(pending(scanned.summary) > 0 ? 'criar' : 'todos')
       setShowAll(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao ler as pastas.')
@@ -103,8 +111,9 @@ function SyncPanel({ projectId }: { projectId: number }) {
 
   async function handleSync() {
     if (!report) return
-    const toCreate = report.summary.a_criar + report.summary.a_criar_so_planilha
-    if (!window.confirm(`Criar ${toCreate} processo(s) e vincular ${report.summary.arquivos_novos} arquivo(s)? Nada no drive é alterado.`)) return
+    const s = report.summary
+    const fill = s.valores_a_preencher ? `, preencher o valor de ${s.valores_a_preencher}` : ''
+    if (!window.confirm(`Criar ${pending(s) - (s.valores_a_preencher ?? 0)} processo(s)${fill} e vincular ${s.arquivos_novos} arquivo(s)? Nada no drive é alterado.`)) return
     setBusy(true)
     setError(null)
     try {
@@ -117,9 +126,12 @@ function SyncPanel({ projectId }: { projectId: number }) {
     }
   }
 
-  const rows = report?.processes.filter((p) => filter === 'todos' || (filter === 'criar' ? p.action.startsWith('criar') : p.action === filter)) ?? []
+  const rows =
+    report?.processes.filter(
+      (p) => filter === 'todos' || (filter === 'criar' ? p.action.startsWith('criar') || p.action === 'preencher_valor' : p.action === filter),
+    ) ?? []
   const visibleRows = showAll ? rows : rows.slice(0, 50)
-  const toCreate = report ? report.summary.a_criar + report.summary.a_criar_so_planilha : 0
+  const toCreate = report ? pending(report.summary) : 0
   const nothingToDo = report !== null && toCreate === 0 && report.summary.arquivos_novos === 0
 
   return (
@@ -129,14 +141,15 @@ function SyncPanel({ projectId }: { projectId: number }) {
       </h3>
       <p className="mb-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
         Lê as pastas (Categoria / Item N / AAAA-NNNN) e mostra o que seria criado. Só grava depois que você confirmar.
-        Informe a planilha de acompanhamento para trazer os valores.
+        Os valores vêm da planilha de acompanhamento: se o campo ficar vazio, é usada a planilha da pasta "0_Saldo por
+        item". Feche-a no Excel antes.
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           className="min-w-64 flex-1 rounded-md border px-3 py-2 text-sm"
           style={input}
-          placeholder="Planilha de valores (opcional), ex.: 0_Saldo por item/NOVA 25465 Acompanhamento de saldo_reformulação.xlsx"
+          placeholder="Planilha de valores — vazio: a da pasta 0_Saldo por item"
           value={ledgerPath}
           onChange={(e) => setLedgerPath(e.target.value)}
         />
@@ -154,12 +167,19 @@ function SyncPanel({ projectId }: { projectId: number }) {
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
       {result && (
         <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#dcfce7', color: '#166534' }}>
-          Sincronizado: {result.processos_criados} processo(s) criado(s) e {result.arquivos_vinculados} arquivo(s) vinculado(s).
+          Sincronizado: {result.processos_criados} processo(s) criado(s)
+          {result.valores_preenchidos ? `, ${result.valores_preenchidos} valor(es) preenchido(s)` : ''} e{' '}
+          {result.arquivos_vinculados} arquivo(s) vinculado(s).
         </p>
       )}
 
       {report && (
         <>
+          <p className="mb-2 text-xs" style={{ color: report.ledger_path ? 'var(--color-text-muted)' : '#a16207' }}>
+            {report.ledger_path
+              ? `Valores da planilha: ${report.ledger_path}`
+              : 'Nenhuma planilha de valores encontrada — os processos novos entram com R$ 0.'}
+          </p>
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {SUMMARY_LABELS.map(([key, label]) => (
               <div key={key} className="rounded-md border p-2" style={{ borderColor: 'var(--color-border)' }}>

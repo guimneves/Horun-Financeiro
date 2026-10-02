@@ -79,6 +79,7 @@ def _run_migrations() -> None:
     _ensure_column("purchaseprocess", "over_balance_confirmed_by", "VARCHAR")
     _ensure_column("purchaseprocess", "over_balance_confirmed_at", "TIMESTAMP")
     _ensure_column("purchaseprocess", "realized_on", "DATE")
+    _ensure_column("purchaseprocess", "ledger_ref", "VARCHAR")
 
 
 def _ensure_module_settings() -> None:

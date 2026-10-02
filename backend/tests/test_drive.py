@@ -80,7 +80,7 @@ def drive(tmp_path, monkeypatch):
     consumo_sheet.append(["Material de Consumo Nacional"])
     consumo_sheet.append(["Item", "Nº do Item", "Favorecido", "Descrição", "Valor", "No de Processo COPPETEC"])
     consumo_sheet.append(["x", 1, "Fornecedor A", "Tubo inox", 1500.50, "2024 1001"])
-    consumo_sheet.append(["x", 1, "Fornecedor X", "Linha sem nº", 99, "?"])
+    consumo_sheet.append(["x", None, "Fornecedor X", "Linha sem nº", 99, "?"])  # sem nº do item: pulada
     equip_sheet = workbook.create_sheet("Equip. Nacional")  # esta aba TEM a coluna "Quantidade"
     equip_sheet.append(["Equipamento Nacional"])
     equip_sheet.append(["Item", "Nº do Item", "Quantidade", "Favorecido", "Descrição", "Valor", "No de Processo COPPETEC"])
@@ -205,6 +205,7 @@ def test_sync_is_idempotent_and_picks_up_new_files(client, drive):
 
 
 def test_sync_without_ledger_creates_zero_value_processes_and_says_so(client, drive):
+    (drive / "0_Saldo por item" / "saldo.xlsx").unlink()  # sem planilha nenhuma na pasta
     project = _project_with_budget(client)
     report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
     assert report["summary"]["sem_valor"] == 2  # 1001 e 2002; o cancelado não precisa de valor
@@ -327,6 +328,90 @@ def test_drive_folder_must_exist_and_ledger_must_be_xlsx(client, drive):
     assert bad.status_code == 422
 
 
+def test_ledger_is_found_in_the_saldo_por_item_folder(client, drive):
+    project = _project_with_budget(client)
+    report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
+    assert report["ledger_path"] == "0_Saldo por item/saldo.xlsx"
+    assert report["summary"]["sem_valor"] == 0  # os valores vieram da planilha achada
+
+
+def test_ledger_choice_skips_old_copies():
+    from app.api.routes_drive import _pick_ledger
+
+    real = ["Calculo Pessoal.xlsx", "NOVA 25465 Acompanhamento de saldo_reformulação.xlsx", "antiga 2.xlsx", "antiga.xlsx"]
+    assert _pick_ledger(real) == "NOVA 25465 Acompanhamento de saldo_reformulação.xlsx"
+    assert _pick_ledger(["a.xlsx", "b.xlsx"]) is None  # na dúvida, não escolhe
+    assert _pick_ledger(["saldo.xlsx"]) == "saldo.xlsx"
+
+
+def test_resync_fills_values_of_processes_imported_without_the_ledger(client, drive):
+    sheet = drive / "0_Saldo por item" / "saldo.xlsx"
+    hidden = drive / "saldo.bak"
+    sheet.rename(hidden)
+    project = _project_with_budget(client)
+    client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN)  # entra tudo com R$ 0
+    hidden.rename(sheet)
+
+    report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
+    assert report["summary"]["valores_a_preencher"] == 2  # 1001 e 2002; o cancelado fica como está
+    result = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert result["valores_preenchidos"] == 2 and result["processos_criados"] == 0
+
+    processes = {p["process_number"]: p for p in client.get(f"/projects/{project['id']}/purchase-processes", headers=ADMIN).json()}
+    assert Decimal(processes["2024-1001"]["estimated_value"]) == Decimal("1500.50")
+    assert Decimal(processes["2024-2002"]["final_value"]) == Decimal("7000.00")  # tem nota fiscal
+    again = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert again["valores_preenchidos"] == 0  # só uma vez
+
+
+@pytest.fixture
+def unnumbered_drive(tmp_path, monkeypatch):
+    """Planilha com lançamentos sem nº de processo, como na real: DOA com a data
+    na coluna do processo, passagem com a coluna vazia e um "?"."""
+    from datetime import datetime
+
+    monkeypatch.setattr(settings, "drive_root", str(tmp_path))
+    project = tmp_path / "Proj"
+    (project / "0_Saldo por item").mkdir(parents=True)
+
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Material de Consumo"
+    sheet.append(["Material de Consumo Nacional"])
+    sheet.append(["Item", "Nº do Item", "Favorecido", "Descrição", "Valor", "No de Processo COPPETEC"])
+    sheet.append(["x", 1, "Fundação", "DOA 2025", 800, datetime(2025, 3, 10)])
+    sheet.append(["x", 1, "Agência", "Passagem", 120.5, None])
+    sheet.append(["x", 1, "Agência", "Passagem", 120.5, None])  # igual à anterior: são duas despesas
+    sheet.append(["x", 1, "Loja", "Compra", 60, "?"])
+    sheet.append(["x", 1, "Loja", "Sem valor", None, "?"])
+    sheet.append(["x", 77, "Loja", "Item que não existe", 10, None])
+    workbook.save(project / "0_Saldo por item" / "saldo.xlsx")
+    return project
+
+
+def test_ledger_lines_without_process_number_become_realized_entries(client, unnumbered_drive):
+    project = _project_with_budget(client, drive_folder="Proj")
+    report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
+    assert report["summary"]["a_criar_sem_numero"] == 4
+    assert report["summary"]["sem_item_no_orcamento"] == 1  # item 77
+    assert any("Sem valor" not in line and "?" in line for line in report["ledger_skipped"])  # linha sem valor
+
+    result = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert result["processos_criados"] == 4
+    processes = client.get(f"/projects/{project['id']}/purchase-processes", headers=ADMIN).json()
+    doa = next(p for p in processes if p["title"] == "DOA 2025")
+    assert doa["process_number"] is None and doa["status"] == "autorizado"
+    assert doa["realized_on"] == "2025-03-10" and doa["origin"] == "planilha_sem_numero"
+
+    balance = {b["category"]: b for b in client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()}
+    assert Decimal(balance["material_consumo_nacional"]["executed"]) == Decimal("1101.00")  # 800 + 2×120,50 + 60
+
+    again = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert again["processos_criados"] == 0  # a identidade da linha evita duplicar
+
+
 @pytest.fixture
 def small_drive(tmp_path, monkeypatch):
     """Um processo com pasta só de cotação que está na planilha, e dois lançamentos
@@ -345,6 +430,7 @@ def small_drive(tmp_path, monkeypatch):
     sheet.append(["x", 1, "Fornecedor A", "Tubo", 400, "2024 4004"])  # tem pasta, só com cotação
     sheet.append(["x", 1, "Fornecedor Y", "Compra sem pasta", 300, "2024 3003"])  # sem pasta
     sheet.append(["x", 77, "Fornecedor Z", "Item que não existe", 50, "2024 3004"])  # sem pasta e sem item
+    sheet.append(["x", "1.1", "Fornecedor W", "Subitem", 25, "2024 3005"])  # subitem: entra no item 1
     workbook.save(project / "saldo.xlsx")
     return project
 
@@ -360,10 +446,12 @@ def test_ledger_promotes_quote_only_folder_to_authorized_and_creates_ledger_only
     assert by_number["2024-3003"]["action"] == "criar_da_planilha"
     assert by_number["2024-3003"]["files_total"] == 0
     assert by_number["2024-3004"]["action"] == "sem_item_no_orcamento"
-    assert report["summary"]["a_criar"] == 1 and report["summary"]["a_criar_so_planilha"] == 1
+    assert by_number["2024-3005"]["item_number"] == 1  # subitem "1.1" conta no item 1
+    assert any("subitem 1.1" in w for w in by_number["2024-3005"]["warnings"])
+    assert report["summary"]["a_criar"] == 1 and report["summary"]["a_criar_so_planilha"] == 2
 
     sync = client.post(f"/projects/{project['id']}/drive/sync", json=body, headers=ADMIN).json()
-    assert sync["processos_criados"] == 2 and sync["arquivos_vinculados"] == 1
+    assert sync["processos_criados"] == 3 and sync["arquivos_vinculados"] == 1
 
     processes = {p["process_number"]: p for p in client.get(f"/projects/{project['id']}/purchase-processes", headers=ADMIN).json()}
     assert processes["2024-4004"]["status"] == "autorizado" and Decimal(processes["2024-4004"]["estimated_value"]) == 400
@@ -372,7 +460,7 @@ def test_ledger_promotes_quote_only_folder_to_authorized_and_creates_ledger_only
 
     # tudo que a planilha lança conta como realizado, e nada fica "comprometido"
     balance = {b["category"]: b for b in client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()}
-    assert Decimal(balance["material_consumo_nacional"]["executed"]) == 700
+    assert Decimal(balance["material_consumo_nacional"]["executed"]) == 725
     assert Decimal(balance["material_consumo_nacional"]["committed"]) == 0
 
     again = client.post(f"/projects/{project['id']}/drive/sync", json=body, headers=ADMIN).json()

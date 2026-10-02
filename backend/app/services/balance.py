@@ -27,6 +27,16 @@ from app.db.models.purchase import PRE_AUTHORIZATION_COMMITTED_STATES, REALIZED_
 from app.services.accrual import compute_accrual
 
 
+# Nestas categorias, item com quantidade 1 é uma VERBA (ex.: "reagentes
+# diversos", R$ 50 mil) gasta em várias compras — cada compra vale 1 e a
+# "quantidade disponível" ficaria negativa (1 − 63 compras), sem sentido.
+# Nesses itens vale só o saldo em R$. Visto na planilha real.
+LUMP_SUM_CATEGORIES = {
+    "material_consumo_nacional", "material_consumo_importado", "servicos_terceiros",
+    "passagens", "diarias", "outras_despesas",
+}
+
+
 @dataclass
 class ItemBalance:
     position_id: int
@@ -136,9 +146,10 @@ def item_balances(
         )
         balance = item.planned_value + item.yield_amount - committed - executed
         is_personnel = bool(EXPENSE_CATEGORIES[position.category]["is_personnel"])
+        is_lump_sum = position.category in LUMP_SUM_CATEGORIES and item.planned_quantity == 1
         available_quantity = (
             None
-            if is_personnel
+            if is_personnel or is_lump_sum
             else item.planned_quantity - _used_quantity(processes_by_position.get(position.id, []))
         )
         results.append(

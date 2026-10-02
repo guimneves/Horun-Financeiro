@@ -27,7 +27,7 @@ from app.schemas.drive import (
     ScanReportOut,
     SyncResultOut,
 )
-from app.services.drive_scan import scan_project_folder
+from app.services.drive_scan import fold, scan_project_folder
 from app.services.drive_sync import SyncPlan, apply_sync, plan_sync
 from app.services.ledger import LedgerError, LedgerResult, read_ledger
 
@@ -48,21 +48,56 @@ def _project_dir(project: Project) -> str:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
+def _pick_ledger(names: list[str]) -> str | None:
+    """Entre as .xlsx da pasta, a de acompanhamento: na pasta real convivem
+    "NOVA ... Acompanhamento de saldo...", "antiga.xlsx", "antiga 2.xlsx" e
+    "Calculo Pessoal.xlsx". Só escolhe quando não há dúvida."""
+    if len(names) <= 1:
+        return names[0] if names else None
+    candidates = [n for n in names if "acompanhamento" in fold(n)] or names
+    current = [n for n in candidates if not any(w in fold(n) for w in ("antig", "backup", "copia", "old"))]
+    return current[0] if len(current) == 1 else None
+
+
+def _find_ledger(project_dir: str) -> str | None:
+    """A planilha de acompanhamento da pasta "0_Saldo por item" (ver
+    `_pick_ledger`) — evita sincronizar sem valores por esquecer o campo
+    (visto na prática: 420 processos entraram com R$ 0)."""
+    try:
+        with os.scandir(fs_path(project_dir)) as it:
+            folders = [e.name for e in it if e.is_dir() and "saldo por item" in fold(e.name)]
+        for folder in folders:
+            with os.scandir(fs_path(os.path.join(project_dir, folder))) as it:
+                sheets = [
+                    e.name for e in it
+                    if e.is_file() and e.name.lower().endswith(".xlsx") and not e.name.startswith("~$")
+                ]
+            chosen = _pick_ledger(sorted(sheets))
+            if chosen:
+                return f"{folder}/{chosen}"
+    except OSError:
+        return None
+    return None
+
+
 def _build_plan(session: Session, project: Project, body: DriveScanRequest) -> SyncPlan:
     project_dir = _project_dir(project)
     ledger: LedgerResult | None = None
-    if body.ledger_path:
-        if not body.ledger_path.lower().endswith(".xlsx"):
+    ledger_path = (body.ledger_path or "").strip() or _find_ledger(project_dir)
+    if ledger_path:
+        if not ledger_path.lower().endswith(".xlsx"):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A planilha de valores precisa ser um .xlsx.")
         try:
-            ledger = read_ledger(str(safe_join(project_drive_dir(project), body.ledger_path)))
+            ledger = read_ledger(str(safe_join(project_drive_dir(project), ledger_path)))
         except (DriveError, LedgerError) as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     try:
         scan = scan_project_folder(project_dir)
     except OSError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Não foi possível ler as pastas do drive: {exc}") from exc
-    return plan_sync(session, project, scan, ledger)
+    plan = plan_sync(session, project, scan, ledger)
+    plan.ledger_path = ledger_path if ledger else None
+    return plan
 
 
 def _report(plan: SyncPlan) -> ScanReportOut:
@@ -93,6 +128,7 @@ def _report(plan: SyncPlan) -> ScanReportOut:
         duplicate_numbers=plan.scan.duplicate_numbers,
         ledger_skipped=plan.ledger_skipped,
         ledger_unused=plan.ledger_unused,
+        ledger_path=plan.ledger_path,
     )
 
 

@@ -42,8 +42,9 @@ def test_dashboard_matches_the_category_summary(client, drive):  # noqa: F811
 
 
 def test_alerts_point_to_what_needs_action(client, drive):  # noqa: F811
+    (drive / "0_Saldo por item" / "saldo.xlsx").unlink()  # sem planilha: valores zero
     project = _project_with_budget(client)
-    client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN)  # sem planilha: valores zero
+    client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN)
     alerts = _board(client, project["id"])["alerts"]
     kinds = {a["kind"] for a in alerts}
     assert "sem_valor" in kinds  # processos que entraram com R$ 0

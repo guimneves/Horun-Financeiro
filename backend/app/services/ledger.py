@@ -5,6 +5,11 @@ um processo com favorecido, descrição, valor e nº de processo COPPETEC.
 As pastas dizem QUAIS processos existem; esta planilha diz QUANTO cada um
 custou e quem foi o favorecido. O vínculo é o nº de processo (normalizado).
 
+Linhas SEM nº de processo válido (DOA, ressarcimentos, passagens pela
+agência, diárias — na planilha real a coluna do processo vem vazia, com uma
+data ou com "?") também são despesas realizadas: a planilha as soma. Vêm em
+`unnumbered`, com o nº do item, para entrarem como lançamentos sem nº.
+
 As colunas são achadas pelo TÍTULO no cabeçalho (linha 2), não por posição:
 umas abas têm a coluna "Quantidade" e outras não, o que desloca as demais.
 Requer `openpyxl` (extra opcional `import`).
@@ -12,9 +17,11 @@ Requer `openpyxl` (extra opcional `import`).
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from app.core.drive import fs_path
@@ -37,6 +44,20 @@ SHEET_CATEGORIES: dict[str, str] = {
 }
 
 _NUMBER_RE = re.compile(r"^\d{4}\D+\d+$")
+_SUBITEM_RE = re.compile(r"^\s*(\d+)\s*[.,]\s*\d+\s*$")
+
+
+def _item_number(raw: object) -> tuple[int | None, str | None]:
+    """(nº do item, subitem como veio). O orçamento só tem itens inteiros: um
+    subitem "1.1" (visto na planilha real, em Serviços) conta no item 1."""
+    if isinstance(raw, bool):
+        return None, None
+    if isinstance(raw, int) or (isinstance(raw, float) and raw.is_integer()):
+        return int(raw), None
+    match = _SUBITEM_RE.match(str(raw)) if isinstance(raw, (str, float)) else None
+    if match:
+        return int(match.group(1)), str(raw).strip()
+    return None, None
 
 
 class LedgerError(Exception):
@@ -53,12 +74,39 @@ class LedgerEntry:
     quantity: Decimal
     value: Decimal
     lines: int = 1  # quantas linhas da planilha foram somadas neste processo
+    subitem: str | None = None  # "1.1": a planilha lança num subitem; entra no item 1
+
+
+@dataclass
+class UnnumberedEntry:
+    """Linha de lançamento sem nº de processo COPPETEC."""
+
+    ref: str  # identidade estável da linha (não duplica ao sincronizar de novo)
+    category: str
+    item_number: int
+    sheet: str
+    line: int
+    vendor: str | None
+    description: str | None
+    quantity: Decimal
+    value: Decimal
+    raw_number: str  # o que estava na coluna do processo ("", "?", uma data...)
+    on_date: date | None  # data da despesa, quando a coluna do processo trazia uma
 
 
 @dataclass
 class LedgerResult:
     entries: dict[str, LedgerEntry]
-    skipped: list[str]  # linhas com nº de processo que não é um nº válido, ou sem valor
+    skipped: list[str]  # linhas que não puderam ser usadas (sem valor, sem nº do item...)
+    unnumbered: list[UnnumberedEntry] = field(default_factory=list)
+
+
+def _line_ref(category: str, item: int, raw: str, vendor: object, description: object, value: Decimal, seen: dict[str, int]) -> str:
+    # Pelo conteúdo, não pela posição: inserir uma linha na planilha não muda
+    # a identidade das outras. Linhas idênticas ganham um nº de ordem.
+    text = "|".join(str(x or "").strip().casefold() for x in (category, item, raw, vendor, description, value))
+    seen[text] = seen.get(text, 0) + 1
+    return hashlib.sha1(f"{text}#{seen[text]}".encode()).hexdigest()[:20]
 
 
 def _as_decimal(value: object) -> Decimal | None:
@@ -109,6 +157,8 @@ def read_ledger(xlsx_path: str) -> LedgerResult:
         raise LedgerError(f"Não foi possível abrir a planilha: {exc}") from exc
     entries: dict[str, LedgerEntry] = {}
     skipped: list[str] = []
+    unnumbered: list[UnnumberedEntry] = []
+    seen_lines: dict[str, int] = {}
     try:
         for sheet_name, category in SHEET_CATEGORIES.items():
             if sheet_name not in workbook.sheetnames:
@@ -122,29 +172,53 @@ def read_ledger(xlsx_path: str) -> LedgerResult:
                 skipped.append(f"{sheet_name}: cabeçalho sem 'Valor' ou 'Nº de Processo' — aba ignorada.")
                 continue
             for line_number, row in enumerate(rows, start=3):
-                raw_number = row[columns["process"]] if columns["process"] < len(row) else None
-                if raw_number in (None, ""):
-                    continue
-                value = _as_decimal(row[columns["value"]])
-                if not _NUMBER_RE.match(str(raw_number).strip()):
-                    amount = f" (valor {value})" if value is not None else ""
-                    skipped.append(
-                        f"{sheet_name} linha {line_number}: '{raw_number}' não parece um nº de processo{amount}."
-                    )
-                    continue
-                if value is None:
-                    skipped.append(f"{sheet_name} linha {line_number}: processo {raw_number} sem valor.")
-                    continue
-                number = normalize_process_number(str(raw_number))
-                assert number is not None
 
                 def cell(key: str) -> object:
                     index = columns.get(key)
                     return row[index] if index is not None and index < len(row) else None
 
-                quantity = _as_decimal(cell("quantity")) or Decimal("1")
+                raw_number = cell("process")
+                value = _as_decimal(cell("value"))
                 item_raw = cell("item")
-                item_number = int(item_raw) if isinstance(item_raw, (int, float)) else None
+                item_number, subitem = _item_number(item_raw)
+                quantity = _as_decimal(cell("quantity")) or Decimal("1")
+                raw_text = "" if raw_number is None else str(raw_number).strip()
+                if not _NUMBER_RE.match(raw_text):
+                    # sem nº de processo: ainda é despesa, se tem valor e item
+                    if value is None or value == 0:
+                        if raw_text:
+                            skipped.append(f"{sheet_name} linha {line_number}: '{raw_text}' sem valor.")
+                        continue
+                    if item_number is None:
+                        skipped.append(
+                            f"{sheet_name} linha {line_number}: lançamento sem nº de processo"
+                            + (f" ('{raw_text}')" if raw_text else "")
+                            + f" e sem nº do item (valor {value}) — não dá para saber em que item lançar."
+                        )
+                        continue
+                    on_date = raw_number.date() if isinstance(raw_number, datetime) else (
+                        raw_number if isinstance(raw_number, date) else None
+                    )
+                    shown = on_date.isoformat() if on_date else raw_text
+                    unnumbered.append(UnnumberedEntry(
+                        ref=_line_ref(category, item_number, shown, cell("vendor"), cell("description"), value, seen_lines),
+                        category=category,
+                        item_number=item_number,
+                        sheet=sheet_name,
+                        line=line_number,
+                        vendor=(str(cell("vendor")).strip() or None) if cell("vendor") else None,
+                        description=(str(cell("description")).strip() or None) if cell("description") else None,
+                        quantity=quantity,
+                        value=value,
+                        raw_number=shown,
+                        on_date=on_date,
+                    ))
+                    continue
+                if value is None:
+                    skipped.append(f"{sheet_name} linha {line_number}: processo {raw_number} sem valor.")
+                    continue
+                number = normalize_process_number(raw_text)
+                assert number is not None
                 if number in entries:
                     existing = entries[number]
                     existing.value += value
@@ -158,7 +232,8 @@ def read_ledger(xlsx_path: str) -> LedgerResult:
                         description=(str(cell("description")).strip() or None) if cell("description") else None,
                         quantity=quantity,
                         value=value,
+                        subitem=subitem,
                     )
     finally:
         workbook.close()
-    return LedgerResult(entries=entries, skipped=skipped)
+    return LedgerResult(entries=entries, skipped=skipped, unnumbered=unnumbered)

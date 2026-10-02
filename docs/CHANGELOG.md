@@ -9,10 +9,32 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 195 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 200 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Sincronização bate com a planilha, categoria a categoria
+
+Conferido com a planilha real: o realizado de todas as 12 categorias de
+despesa agora é igual ao da coluna "Valor Realizado" da aba Saldo por Item
+(só a Equipe Executora difere, por contar até hoje).
+
+- **Lançamentos sem nº de processo** (DOA, ressarcimentos, passagens pela
+  agência, diárias, linhas com "?" ou data na coluna do processo) entram como
+  realizados no item da coluna "Nº do Item" (`origin = planilha_sem_numero`,
+  sem arquivos). Identidade da linha em `ledger_ref` (pelo conteúdo — não
+  duplica ao sincronizar de novo); data na coluna do processo vira
+  `realized_on`. Antes eram descartados sem aviso (~R$ 790 mil).
+- **Subitem "1.1"** na coluna "Nº do Item" conta no item 1, com aviso.
+- **Preencher valor**: processo que entrou com R$ 0 (sincronizado sem a
+  planilha) recebe o valor da planilha na próxima sincronização.
+- **Planilha achada sozinha**: com o campo vazio, a sincronização usa a
+  planilha de acompanhamento da pasta "0_Saldo por item" (ignora "antiga…").
+  Visto na prática: o campo ficou vazio e 420 processos entraram com R$ 0.
+- **"Quantidade disponível" de verba**: item de quantidade 1 em Material de
+  Consumo, Serviços, Passagens, Diárias e Outras Despesas é uma verba gasta em
+  várias compras — mostra "verba" em vez de 1 − 63 = −62.
 
 ## 02/10/2026 — Ritmo de execução no Resumo
 

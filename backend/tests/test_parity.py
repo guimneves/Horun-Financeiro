@@ -46,6 +46,18 @@ def test_available_quantity_is_null_for_personnel(client):
     assert balance["available_quantity"] is None
 
 
+def test_lump_sum_item_has_no_available_quantity(client):
+    # material de consumo com quantidade 1 = verba gasta em várias compras
+    project, item = _project_with_active_budget(
+        client, category="material_consumo_nacional", unit_value="5000", planned_quantity="1"
+    )
+    _create_process(client, project, item, estimated_unit_value="100", quantity="1")
+    _create_process(client, project, item, estimated_unit_value="200", quantity="1")
+    balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()[0]
+    assert balance["available_quantity"] is None  # e não 1 − 2 = −1
+    assert Decimal(balance["balance"]) == Decimal("4700.00")
+
+
 def test_installments_and_utilization_follow_the_spreadsheet_rule(client):
     project, item = _project_with_active_budget(client, unit_value="1000", planned_quantity="10")
     url = f"/projects/{project['id']}/installments"
