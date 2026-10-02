@@ -1,0 +1,12 @@
+{
+  "name": "@horun/design-system",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tokens de tema, ThemeProvider/ThemeToggle e rodapé padrão compartilhados por todos os módulos do Horun.",
+  "type": "module",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "react": "^19",
+    "framer-motion": "^12"
+  }
+}

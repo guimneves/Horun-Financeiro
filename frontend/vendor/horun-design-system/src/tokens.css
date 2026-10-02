@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* @horun/design-system é referenciado via "file:" (fica dentro de
+   node_modules do app que o consome) — o Tailwind v4 não escaneia
+   node_modules por padrão na detecção automática de classes, então as
+   classes usadas nos componentes deste pacote (ThemeToggle.tsx,
+   HorunFooter.tsx) nunca eram geradas no CSS final sem isto. */
+@source "./*.tsx";
+
+/*
+ * Paleta compartilhada do Horun — azul/branco ancorado no azul-marinho do
+ * logo do NQTR (#15216F). Três modos: claro / semi-escuro (dim) / escuro.
+ * Extraído de Rock Eval Horun Dev/frontend/src/index.css — fonte única
+ * agora para todos os módulos, não só o RE7S.
+ *
+ * Tokens ESPECÍFICOS de um módulo (ex. cores de status do carrossel do
+ * RE7S) NÃO entram aqui — ficam no index.css do próprio módulo, que
+ * importa este arquivo antes e só acrescenta os tokens que precisar.
+ */
+
+:root,
+[data-theme='light'] {
+  --color-bg: #f5f7fc;
+  --color-bg-elevated: #ffffff;
+  --color-surface: #eef1f8;
+  --color-border: #dde3f0;
+  --color-text: #10162b;
+  --color-text-muted: #4b5573;
+  --color-primary: #15216f;
+  --color-primary-hover: #1f2f8f;
+  --color-primary-contrast: #ffffff;
+}
+
+[data-theme='dim'] {
+  --color-bg: #1b2035;
+  --color-bg-elevated: #232a47;
+  --color-surface: #2a3257;
+  --color-border: #3a4270;
+  --color-text: #e8ebf5;
+  --color-text-muted: #a8b0d0;
+  --color-primary: #7c8cff;
+  --color-primary-hover: #97a4ff;
+  --color-primary-contrast: #0a0d1a;
+}
+
+[data-theme='dark'] {
+  --color-bg: #0a0d1a;
+  --color-bg-elevated: #12162b;
+  --color-surface: #171c38;
+  --color-border: #232a4d;
+  --color-text: #f0f2fa;
+  --color-text-muted: #8890b8;
+  --color-primary: #6c7fff;
+  --color-primary-hover: #8b9aff;
+  --color-primary-contrast: #05070f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 200ms ease, color 200ms ease;
+}

@@ -213,11 +213,10 @@ agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias
 - Equipe Executora: importação de pessoal a partir das planilhas/pastas ainda não
   feita.
 - Alembic × `_ensure_column` (decidir com o Core).
-- **Build Docker do frontend**: `package.json` aponta o design-system para
-  `file:../../Horun Core/design-system`, fora do contexto de build
-  (`./frontend`) — `docker compose build` falha fora da máquina de
-  desenvolvimento. Decidir: contexto de build na pasta-mãe, ou design-system
-  publicado como pacote/tarball versionado (decisão do Core).
+- ~~Build Docker do frontend sem o design-system~~ — resolvido em 2026-10-02:
+  cópia versionada em `frontend/vendor/horun-design-system/` (gerada por
+  `Horun-Core/scripts/vendor_design_system.py`; `--check` diz se ficou
+  desatualizada). Não edite a cópia: mude no Core e rode o script de novo.
 - **`wip/drive-agent`** precisa ser atualizada com o `master`: as rotas do
   agente passam a ficar sob `/api` automaticamente (laço em `main.py`); o
   agente tem que usar a URL com `/api`.

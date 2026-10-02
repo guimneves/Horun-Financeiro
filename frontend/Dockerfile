@@ -4,8 +4,11 @@
 # standalone, fora do Core, sem precisar mudar nada.
 FROM node:22-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
+# vendor/ (cópia do design-system do Core) precisa estar no contexto antes
+# do npm ci — a dependência é "file:./vendor/horun-design-system"
+COPY package.json package-lock.json ./
+COPY vendor ./vendor
+RUN npm ci
 COPY . .
 ARG VITE_BASE=/
 RUN npm run build -- --base=$VITE_BASE
