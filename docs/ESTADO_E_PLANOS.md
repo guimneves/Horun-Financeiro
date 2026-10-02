@@ -145,7 +145,12 @@ agente, o **Horun Agent** (já existe em `Programas/Horun Agent`, com a ponte do
 lado servidor no RE7S) lê por ele. O agente consulta o servidor (nunca o
 contrário), então o PC não abre porta.
 
-### Lado do agente (outra sessão) — ver `AGENT_CONTRACT.md`
+### Lado do agente — FEITO (Agent-Horun 0.4.0, 2026-10-02)
+Agente e pacote único do servidor do agente prontos; a `wip/drive-agent` já usa
+o pacote (commit 574c40a: ponte, rotas e tabelas iguais às do RE7S; diferenças
+em relação ao pedido original no topo do `AGENT_CONTRACT.md` daquela branch).
+Rede: porta estreita própria (proposta 8002), sem liberar o gateway do Core.
+Pedido original, para referência:
 `list_tree` (pastas+tamanhos), `read_file` com `offset/length` e `size`, campo
 `code` nos erros, roots somente leitura, **caminhos > 260 no Windows**, cabeçalho
 `X-Horun-Agent-Version: 0.2` (obrigatório) e `Task` tolerante a campos extras.
@@ -183,11 +188,11 @@ Há um prompt pronto no fim do contrato.
    antigo (sem versão → não recebe campos novos nem `list_tree`), tarefa expirada,
    arquivo acima do limite, leitura em pedaços, token revogado.
 7. **Docker/compose**: variáveis `MODULE_DRIVE_MODE=agent`, root e timeout.
-8. **Core (não é deste repositório)**: o gateway precisa deixar
-   `/m/financeiro/agent/*` passar **sem sessão de usuário** (o agente usa o
-   `device_token`).
-9. Avaliar **extrair o lado servidor do agente** para um pacote compartilhado
-   entre RE7S e Financeiro (hoje cada módulo reimplementa).
+8. ~~Core liberar `/m/financeiro/agent/*`~~ — não precisa: porta estreita
+   (8002, nginx como o do RE7S).
+9. ~~Extrair o lado servidor do agente~~ — FEITO (pacote único, ligado na
+   `wip/drive-agent`; itens 4 e 6 em parte: `routes_agent` no `main.py` e
+   `tests/test_agent_package.py`).
 
 ### Consequências aceitas do modo agente
 Latência de um intervalo de consulta por ação; sem o PC ligado não se lista nem
