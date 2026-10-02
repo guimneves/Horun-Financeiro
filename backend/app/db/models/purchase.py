@@ -7,7 +7,7 @@ reaberta — uma nova tentativa é um `PurchaseProcess` novo, com
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import Column, Index, Numeric
@@ -73,6 +73,10 @@ class PurchaseProcess(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
     completed_at: datetime | None = None
+    # Quando o valor passou a contar como realizado (autorização) — gravada ao
+    # autorizar pelo módulo, ou informada à mão. Nula nos importados do drive:
+    # o gráfico de ritmo estima pelo nº de processo (services/pace.py).
+    realized_on: date | None = None
     closed_at: datetime | None = None  # setado em rejeitado/cancelado também
     # Nota fiscal registrada ACIMA do saldo do item, confirmada por alguém
     # depois do aviso (routes_purchases.transition_process). Nunca bloqueia —

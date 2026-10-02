@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
@@ -25,6 +25,7 @@ class PurchaseProcessUpdate(BaseModel):
     estimated_unit_value: Money | None = None
     process_number: str | None = None
     asset_registration_flag: bool | None = None
+    realized_on: date | None = None  # data do realizado (autorização); pode ser limpa
 
     # vendor/process_number podem ser limpos com null; estes, não.
     _not_null = field_validator("title", "quantity", "estimated_unit_value", "asset_registration_flag")(reject_null)
@@ -53,6 +54,7 @@ class PurchaseProcessOut(BaseModel):
     updated_at: datetime
     completed_at: datetime | None
     closed_at: datetime | None
+    realized_on: date | None = None
     # Nota fiscal acima do saldo, confirmada depois do aviso (sinal na lista).
     over_balance_confirmed_by: str | None = None
     over_balance_confirmed_at: datetime | None = None

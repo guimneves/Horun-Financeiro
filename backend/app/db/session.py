@@ -78,6 +78,7 @@ def _run_migrations() -> None:
     _ensure_column("budgetitem", "coppetec_process_number", "VARCHAR")
     _ensure_column("purchaseprocess", "over_balance_confirmed_by", "VARCHAR")
     _ensure_column("purchaseprocess", "over_balance_confirmed_at", "TIMESTAMP")
+    _ensure_column("purchaseprocess", "realized_on", "DATE")
 
 
 def _ensure_module_settings() -> None:

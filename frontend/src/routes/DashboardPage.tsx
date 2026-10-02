@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Area,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import {
   dashboardApi,
   type Dashboard,
   type DashboardAlert,
   type DashboardCategory,
+  type DashboardPace,
   type DashboardTotals,
 } from '../api/dashboard'
 import { MoneyValue } from '../components/common/MoneyValue'
@@ -126,6 +139,124 @@ function CategoryChart({ categories }: { categories: DashboardCategory[] }) {
         </BarChart>
       </ResponsiveContainer>
     </div>
+  )
+}
+
+// Ritmo de execução: o realizado em tons de azul (como no gráfico acima),
+// as referências em linha.
+const PACE = {
+  personnel: { label: 'Equipe Executora', color: '#2a78d6' },
+  purchases: { label: 'Compras e demais despesas', color: '#8db8ea' },
+  expected: { label: 'Ritmo do prazo', color: '#6b6a64' },
+  received: { label: 'Parcelas previstas', color: '#1f9d6b' },
+} as const
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const monthLabel = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]}/${iso.slice(2, 4)}`
+
+/** Realizado acumulado mês a mês × o ritmo linear do prazo e as parcelas
+ * previstas — tudo em % do orçamento + rendimentos. */
+function PaceChart({ pace, visible }: { pace: DashboardPace; visible: boolean }) {
+  if (pace.points.length === 0) {
+    return (
+      <p className="text-sm" style={muted}>
+        Sem dados ainda — defina a vigência em Configurações e importe a equipe e as compras.
+      </p>
+    )
+  }
+  const toPct = (v: string | null) => (v === null ? null : Math.round(Number(v) * 1000) / 10)
+  const rows = pace.points.map((p) => ({
+    month: p.month,
+    personnel: toPct(p.personnel_share),
+    purchases: toPct(p.purchases_share),
+    expected: toPct(p.expected_share),
+    received: toPct(p.received_share),
+    executedBrl: p.executed,
+    expectedBrl: p.expected,
+    receivedBrl: p.received,
+  }))
+  const now = new Date()
+  const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const hasExpected = rows.some((r) => r.expected !== null)
+  const hasReceived = rows.some((r) => (r.received ?? 0) > 0)
+  const top = Math.max(100, ...rows.map((r) => Math.max((r.personnel ?? 0) + (r.purchases ?? 0), r.received ?? 0, r.expected ?? 0)))
+  const domainTop = Math.ceil(top / 25) * 25
+  const brl = (v: string | null) => (v === null ? '' : ` · ${compactBrl.format(Number(v))}`)
+  const estimated = share(pace.estimated_share)
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap gap-4 text-xs" style={muted}>
+        {(['personnel', 'purchases'] as const).map((k) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: PACE[k].color }} />
+            {PACE[k].label}
+          </span>
+        ))}
+        {hasExpected && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: PACE.expected.color }} />
+            {PACE.expected.label}
+          </span>
+        )}
+        {hasReceived && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 border-t-2" style={{ borderColor: PACE.received.color }} />
+            {PACE.received.label}
+          </span>
+        )}
+      </div>
+      <div style={{ width: '100%', height: 300 }}>
+        <ResponsiveContainer>
+          <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+            <CartesianGrid vertical={false} stroke="var(--color-border)" />
+            <XAxis
+              dataKey="month"
+              tickFormatter={monthLabel}
+              minTickGap={24}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              stroke="var(--color-border)"
+            />
+            <YAxis
+              domain={[0, domainTop]}
+              ticks={Array.from({ length: domainTop / 25 + 1 }, (_, i) => i * 25)}
+              tickFormatter={(v) => `${v}%`}
+              width={48}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              stroke="var(--color-border)"
+            />
+            <Tooltip
+              labelFormatter={(label) => monthLabel(String(label))}
+              formatter={(value, name, item) => {
+                const key = name as keyof typeof PACE
+                const row = item.payload as (typeof rows)[number]
+                const extra = !visible ? '' : key === 'expected' ? brl(row.expectedBrl) : key === 'received' ? brl(row.receivedBrl) : ''
+                return [`${value}%${extra}`, PACE[key]?.label ?? name]
+              }}
+              contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', fontSize: 12 }}
+            />
+            <ReferenceLine
+              x={current}
+              stroke="var(--color-text-muted)"
+              strokeDasharray="2 3"
+              label={{ value: 'hoje', position: 'insideTopLeft', fill: 'var(--color-text-muted)', fontSize: 11 }}
+            />
+            <Area type="monotone" dataKey="personnel" stackId="r" stroke={PACE.personnel.color} fill={PACE.personnel.color} fillOpacity={0.85} isAnimationActive={false} />
+            <Area type="monotone" dataKey="purchases" stackId="r" stroke={PACE.purchases.color} fill={PACE.purchases.color} fillOpacity={0.85} isAnimationActive={false} />
+            {hasReceived && <Line type="stepAfter" dataKey="received" stroke={PACE.received.color} strokeWidth={2} dot={false} isAnimationActive={false} />}
+            {hasExpected && (
+              <Line type="linear" dataKey="expected" stroke={PACE.expected.color} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {estimated !== null && estimated > 0 && (
+        <p className="mt-2 text-xs" style={muted}>
+          {pct.format(estimated)} do orçamento ({pace.estimated_processes} {pace.estimated_processes === 1 ? 'compra' : 'compras'}
+          {visible && pace.estimated_amount !== null ? `, ${compactBrl.format(Number(pace.estimated_amount))}` : ''}) está no mês
+          estimado pelo nº de processo COPPETEC — compras importadas do drive não trazem a data. As autorizadas pelo módulo
+          entram na data exata.
+        </p>
+      )}
+    </>
   )
 }
 
@@ -292,18 +423,30 @@ function Alerts({ alerts, projectId }: { alerts: DashboardAlert[]; projectId: nu
 }
 
 /** Aba Resumo (pedido do usuário: "parecido com a planilha, com gráficos"):
- * indicadores, uso do orçamento por categoria, o Quadro Resumo, parcelas e
- * o que precisa de atenção. Colaborador vê tudo em percentuais. */
+ * indicadores, uso do orçamento por categoria, ritmo de execução, o Quadro
+ * Resumo, parcelas e o que precisa de atenção. Colaborador vê tudo em percentuais. */
 export function DashboardPage() {
   const { project } = useOutletContext<ProjectContext>()
   const [board, setBoard] = useState<Dashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    dashboardApi
-      .get(project.id)
-      .then(setBoard)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar o resumo.'))
+    const load = () =>
+      dashboardApi
+        .get(project.id)
+        .then((b) => {
+          setBoard(b)
+          setError(null)
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar o resumo.'))
+    load()
+    // recarrega ao voltar para a aba do navegador (ex.: depois de sincronizar
+    // o drive em outra aba)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [project.id])
 
   if (project.active_revision_id === null) {
@@ -327,6 +470,13 @@ export function DashboardPage() {
         </h3>
         <Legend />
         <CategoryChart categories={board.categories} />
+      </section>
+
+      <section className="mb-6 rounded-lg border p-4" style={card}>
+        <h3 className={sectionTitle} style={muted}>
+          Ritmo de execução
+        </h3>
+        <PaceChart pace={board.pace} visible={board.values_visible} />
       </section>
 
       <section className="mb-6">
