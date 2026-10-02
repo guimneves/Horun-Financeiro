@@ -88,9 +88,11 @@ if DEV_MODE:
     # backend (porta 8000) são origens diferentes pro navegador. Em
     # produção, plugado no Core, tudo roda na mesma origem via gateway —
     # CORS não existe nem faz falta lá (Prompt_Horun_Modulo.md, seção 6).
+    # Qualquer porta local: permite subir uma segunda cópia para teste ao
+    # lado da que está aberta (frontend com VITE_API_URL apontando aqui).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
         allow_methods=["*"],
         allow_headers=["*"],
     )

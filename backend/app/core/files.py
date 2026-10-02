@@ -12,10 +12,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.drive import fs_path, project_drive_dir, safe_join
@@ -76,3 +78,27 @@ def delete_file(storage_path: str) -> None:
     path = resolve_path(storage_path)
     if path.exists():
         path.unlink()
+
+
+# Tipos que podem ser EXIBIDOS na página (leitor do navegador) em vez de
+# baixados — pedido do usuário: ler os PDFs sem baixar. Lista fechada de
+# propósito: um HTML ou SVG aberto dentro do Horun rodaria script com a
+# sessão de quem abriu; esses continuam sempre como download.
+PREVIEWABLE_TYPES = frozenset({
+    "application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain",
+})
+
+
+def file_response(path: str | os.PathLike[str], filename: str, media_type: str | None, *, inline: bool = False) -> FileResponse:
+    """Resposta de arquivo: download (padrão) ou exibição na página, se
+    `inline` e o tipo estiver em `PREVIEWABLE_TYPES`."""
+    media_type = (media_type or "application/octet-stream").split(";")[0].strip().lower()
+    show = inline and media_type in PREVIEWABLE_TYPES
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="inline" if show else "attachment",
+        # o navegador nunca "adivinha" outro tipo (ex. tratar como HTML)
+        headers={"X-Content-Type-Options": "nosniff"},
+    )

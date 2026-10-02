@@ -8,13 +8,12 @@ import os
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.drive import DriveError
-from app.core.files import delete_file, read_upload_limited, resolve_document_path, save_upload
+from app.core.files import delete_file, file_response, read_upload_limited, resolve_document_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.money import round_money
 from app.core.permissions import get_membership
@@ -479,6 +478,7 @@ def download_document(
     project_id: int,
     process_id: int,
     doc_id: int,
+    inline: bool = False,
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
@@ -493,7 +493,7 @@ def download_document(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     if not os.path.isfile(path):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado no armazenamento.")
-    return FileResponse(path, media_type=doc.content_type, filename=doc.original_filename)
+    return file_response(path, doc.original_filename, doc.content_type, inline=inline)
 
 
 @router.delete("/{process_id}/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

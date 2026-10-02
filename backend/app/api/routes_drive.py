@@ -9,11 +9,11 @@ import mimetypes
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
 from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.drive import DriveError, fs_path, project_drive_dir, safe_join
+from app.core.files import file_response
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
 from app.db.models.project import Project, ProjectMembership
@@ -181,6 +181,7 @@ def browse_drive(
 def download_drive_file(
     project_id: int,
     path: str,
+    inline: bool = False,
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
@@ -192,4 +193,5 @@ def download_drive_file(
     if not os.path.isfile(target):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado.")
     name = os.path.basename(path.replace("\\", "/"))
-    return FileResponse(target, media_type=mimetypes.guess_type(name)[0] or "application/octet-stream", filename=name)
+    # inline: exibir na página (PDF, imagem, texto) em vez de baixar
+    return file_response(target, name, mimetypes.guess_type(name)[0], inline=inline)
