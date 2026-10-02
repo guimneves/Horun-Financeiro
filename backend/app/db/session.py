@@ -29,6 +29,7 @@ from app.db.models import document as _document_models  # noqa: F401
 from app.db.models import audit as _audit_models  # noqa: F401
 from app.db.models import funding as _funding_models  # noqa: F401
 from app.db.models import agent as _agent_models  # noqa: F401
+from app.agent_server.models import MIGRATIONS as AGENT_MIGRATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,9 @@ def _run_migrations() -> None:
     _ensure_column("purchaseprocess", "origin", "VARCHAR DEFAULT 'manual'")
     _ensure_column("purchaseprocess", "drive_rel_path", "VARCHAR")
     _ensure_unique_index("uq_process_project_number", "purchaseprocess", "project_id, process_number")
+    # colunas novas das tabelas do agente (pacote único — ver app/agent_server)
+    for table, column, ddl_type in AGENT_MIGRATIONS:
+        _ensure_column(table, column, ddl_type)
 
 
 def create_db_and_tables() -> None:

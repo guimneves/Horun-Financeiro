@@ -142,7 +142,11 @@ agente, o **Horun Agent** (já existe em `Programas/Horun Agent`, com a ponte do
 lado servidor no RE7S) lê por ele. O agente consulta o servidor (nunca o
 contrário), então o PC não abre porta.
 
-### Lado do agente (outra sessão) — ver `AGENT_CONTRACT.md`
+### Lado do agente — FEITO (Agent-Horun 0.4.0, 2026-10-02)
+O servidor do agente agora é o pacote único (`backend/app/agent_server/`, o
+mesmo do RE7S). Diferenças em relação ao pedido original no topo do
+`AGENT_CONTRACT.md` (campos em `args`, versões 0.3/0.4, porta estreita em vez
+de liberar o gateway). Texto original do pedido, para referência:
 `list_tree` (pastas+tamanhos), `read_file` com `offset/length` e `size`, campo
 `code` nos erros, roots somente leitura, **caminhos > 260 no Windows**, cabeçalho
 `X-Horun-Agent-Version: 0.2` (obrigatório) e `Task` tolerante a campos extras.
@@ -179,17 +183,20 @@ Há um prompt pronto no fim do contrato.
    de `test_drive.py` em modo agente; casos: agente offline (falha rápida), agente
    antigo (sem versão → não recebe campos novos nem `list_tree`), tarefa expirada,
    arquivo acima do limite, leitura em pedaços, token revogado.
-7. **Docker/compose**: variáveis `MODULE_DRIVE_MODE=agent`, root e timeout.
-8. **Core (não é deste repositório)**: o gateway precisa deixar
-   `/m/financeiro/agent/*` passar **sem sessão de usuário** (o agente usa o
-   `device_token`).
-9. Avaliar **extrair o lado servidor do agente** para um pacote compartilhado
-   entre RE7S e Financeiro (hoje cada módulo reimplementa).
+7. **Docker/compose**: variáveis `MODULE_DRIVE_MODE=agent`, root e timeout;
+   **porta estreita do agente** (8002, nginx como o do RE7S — ver
+   `AGENT_CONTRACT.md`, "Rede").
+8. ~~Core liberar `/m/financeiro/agent/*`~~ — não precisa: porta estreita.
+9. ~~Extrair o lado servidor do agente~~ — FEITO: pacote único, já ligado aqui
+   (`routes_agent` no `main.py`, migrações em `AGENT_MIGRATIONS`). Para
+   atualizar: `python scripts/vendor_server.py "<Financeiro>/backend"` no
+   Agent-Horun.
 
 ### Consequências aceitas do modo agente
 Latência de um intervalo de consulta por ação; sem o PC ligado não se lista nem
 baixa arquivo (processos/documentos já cadastrados continuam consultáveis); um
-agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias).
+mesmo agente pode atender vários módulos no mesmo PC (`servers` no
+`config.json`, desde 0.3.0).
 
 ## 8. Pendências e decisões em aberto
 

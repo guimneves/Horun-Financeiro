@@ -106,7 +106,7 @@ class AgentDrive(DriveBackend):
         try:
             entries = agent_bridge.list_tree(self.root_name, join_rel("", path), recursive=recursive)
         except agent_bridge.AgentTaskError as exc:
-            if exc.not_found:
+            if agent_bridge.file_not_found(exc):
                 raise DriveNotFound(f"Pasta não encontrada no drive: {path or '(raiz)'}") from exc
             raise DriveError(str(exc)) from exc
         return sorted((DriveEntry(e.path, e.is_dir, e.size) for e in entries), key=lambda e: e.path)
@@ -117,7 +117,7 @@ class AgentDrive(DriveBackend):
         try:
             return agent_bridge.read_bytes(self.root_name, join_rel("", path), max_bytes=max_bytes)
         except agent_bridge.AgentTaskError as exc:
-            if exc.not_found:
+            if agent_bridge.file_not_found(exc):
                 raise DriveNotFound(f"Arquivo não encontrado no drive: {path}") from exc
             raise DriveError(str(exc)) from exc
 

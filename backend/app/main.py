@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    routes_agent,
     routes_budget,
     routes_categories,
     routes_drive,
@@ -46,6 +47,7 @@ app.include_router(routes_purchases.router)
 app.include_router(routes_personnel.router)
 app.include_router(routes_funding.router)
 app.include_router(routes_drive.router)
+app.include_router(routes_agent.router)
 
 
 @app.get("/health")

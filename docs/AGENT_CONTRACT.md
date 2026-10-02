@@ -1,9 +1,30 @@
 # Contrato Financeiro ↔ Horun Agent (extensões ao `PROTOCOL.md`)
 
-> **Status:** contrato proposto. O lado do Financeiro está em andamento na branch
-> `wip/drive-agent` (na `master` só existe o modo `local`, então
-> `MODULE_DRIVE_MODE` ainda não tem efeito lá). O lado do agente é feito no
-> repositório Horun Agent.
+> **Status (2026-10-02): implementado no Agent-Horun 0.4.0** e no pacote único
+> do servidor do agente, que esta branch já usa (`backend/app/agent_server/`,
+> cópia gerada por `Agent-Horun/scripts/vendor_server.py` — não edite lá).
+> `services/agent_bridge.py`, `api/routes_agent.py` e `db/models/agent.py`
+> viraram fachadas finas; testes em `tests/test_agent_package.py`.
+> O texto abaixo é o pedido original. **Diferenças em relação a ele** (vale o
+> `PROTOCOL.md` do Agent-Horun):
+>
+> | Pedido aqui | Como ficou |
+> |---|---|
+> | `offset`/`length`/`recursive` soltos na tarefa | dentro de `args` (`{"offset", "length"}`, `{"recursive"}`) |
+> | `X-Horun-Agent-Version: 0.2` | versões reais: leitura em pedaços ≥ 0.3.0, `list_tree` ≥ 0.4.0; sem cabeçalho = 0.2.0 |
+> | `truncated: true` acima de 50.000 itens | erro `code: "too_large"` (peça uma subpasta) |
+> | `"read_only": true` | aceito; equivale a `"mode": "read"` (também há `read-move`, `read-write`) |
+> | `result_entries`, `result_error_code`... | colunas do pacote: `result_paths` (JSON das entradas), `result_code` |
+> | gateway do Core liberar `/m/financeiro/agent/*` | **não**: porta estreita própria (ver "Rede" abaixo) |
+>
+> ## Rede — como o agente chega ao Financeiro
+> Como no RE7S (`frontend/nginx.conf`, segundo `server { listen 8001; }`): uma
+> porta própria que só repassa `/agent/enroll`, `/agent/tasks` e
+> `/agent/tasks/{id}/result` ao backend e responde 404 ao resto
+> (`client_max_body_size 50m`). Proposta: **8002**, publicada no compose e com
+> regra no Firewall do Windows do servidor. No `config.json` do agente:
+> `"url": "http://192.168.31.80:8002"`. Conferência: `curl
+> http://<servidor>:8002/agent/enroll-codes` tem que dar 404. O Core não muda.
 
 O Horun Financeiro lê o drive do projeto (pasta do OneDrive) por dois caminhos,
 escolhidos por `MODULE_DRIVE_MODE`:
@@ -119,24 +140,6 @@ Servidor sem agente 0.2 online: `list_tree` falha com mensagem "agente
 desatualizado" (não fica pendente para sempre). `read_file` continua
 funcionando com agente antigo, só que sem pedaços (arquivo inteiro).
 
-## Fora do escopo do agente (lado do servidor)
-
-O gateway do Horun Core precisa deixar `/m/financeiro/agent/*` passar **sem
-exigir sessão de usuário** (o agente se autentica com o `device_token`, não com
-login). Hoje isso é requisito do RE7S também; é uma regra do Core, não do agente.
-
 ## Prompt para a sessão do agente
 
-> No repositório Horun Agent, implemente as extensões descritas em
-> `Horun-Financeiro/docs/AGENT_CONTRACT.md`: (1) operação `list_tree`
-> (pastas + arquivos com tamanho, recursivo ou não, relativos ao root, posix,
-> limite de 50.000 entradas com `truncated`); (2) `read_file` com `offset`/`length`
-> opcionais e `size` no resultado, com limite `max_read_bytes` configurável;
-> (3) campo opcional `code` nos erros; (4) roots somente leitura no
-> `config.json` (formato antigo continua válido); (5) suporte a caminhos
-> acima de 260 caracteres no Windows (prefixo `\\?\`), sem vazá-lo nos
-> resultados; (6) cabeçalho `X-Horun-Agent-Version: 0.2` em toda consulta de
-> tarefas (obrigatório: sem ele o servidor não envia os campos novos) e
-> `Task` tolerante a campos extras. Mantenha compatibilidade
-> com o protocolo atual, atualize `PROTOCOL.md` e `config.example.json`, e
-> escreva testes (inclusive um caminho > 260 caracteres e path traversal).
+Feito — Agent-Horun 0.4.0 (ver o status no topo).
