@@ -56,3 +56,17 @@ def test_purchase_document_preview(client, drive):  # noqa: F811
     url = f"/projects/{project['id']}/purchase-processes/{process['id']}/documents/{pdf['id']}/download"
     assert client.get(url, params={"inline": "true"}, headers=COLAB).headers["content-disposition"].startswith("inline")
     assert client.get(url, headers=COLAB).headers["content-disposition"].startswith("attachment")
+
+
+def test_ledger_open_in_excel_gives_a_clear_message(client, drive, monkeypatch):  # noqa: F811
+    import openpyxl
+
+    def locked(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(openpyxl, "load_workbook", locked)
+    project = _project_with_budget(client)
+    r = client.post(
+        f"/projects/{project['id']}/drive/scan", json={"ledger_path": "0_Saldo por item/saldo.xlsx"}, headers=ADMIN
+    )
+    assert r.status_code == 422 and "aberta no Excel" in r.json()["detail"]

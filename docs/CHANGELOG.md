@@ -9,10 +9,29 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 180 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 187 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Importar a Equipe Executora da planilha
+
+- **Vagas** (Revisões → Importar da planilha): a 1ª tabela de Equipe
+  Executora da aba "Saldo por Item" vira itens da categoria — uma vaga por
+  linha, valor total mensal (valor + encargos) × "Período (em meses)";
+  remuneração, modalidade e carga horária na observação do item. Uma 2ª
+  tabela de Equipe Executora (na planilha real, com `#REF!`) é ignorada com
+  aviso. Nº que junta vagas ("11, 22, 23, 24") vira a vaga do 1º número e as
+  linhas avulsas desses números saem.
+- **Pessoas** (Pessoal → Importar da planilha): aba "Equipe Executora" —
+  pessoa, vaga, ativo/encerrado, início e fim de REFERÊNCIA, valor mensal.
+  Prévia com o realizado da planilha ao lado do calculado pelo módulo;
+  idempotente (mesma pessoa + vaga + início não repete). Conferido com a
+  planilha real: na data da planilha, o realizado do módulo é igual ao dela,
+  pessoa a pessoa. `services/personnel_import.py`, `tests/test_personnel_import.py`.
+- Planilha aberta no Excel (o Windows trava o arquivo): "Ler pastas" e os
+  envios de planilha dizem para fechar e tentar de novo, em vez de erro 500
+  ou "Failed to fetch".
 
 ## 02/10/2026 — Ler arquivos sem baixar
 

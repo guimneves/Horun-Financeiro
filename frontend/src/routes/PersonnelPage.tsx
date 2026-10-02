@@ -5,12 +5,14 @@ import type { PersonnelAssignment } from '../types/personnel'
 import { NewAssignmentModal } from '../components/personnel/NewAssignmentModal'
 import { AssignmentRow } from '../components/personnel/AssignmentRow'
 import type { ProjectContext } from './ProjectLayout'
+import { PersonnelImportPanel } from '../components/personnel/PersonnelImportPanel'
 
 export function PersonnelPage() {
   const { project } = useOutletContext<ProjectContext>()
   const [assignments, setAssignments] = useState<PersonnelAssignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   const load = useCallback(() => {
     personnelApi
@@ -35,16 +37,30 @@ export function PersonnelPage() {
           Equipe Executora
         </h2>
         {isCoordenador && (
-          <button
-            type="button"
-            onClick={() => setShowNew(true)}
-            className="rounded-md px-4 py-2 text-sm font-medium"
-            style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
-          >
-            + Nova atribuição
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="rounded-md border px-4 py-2 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              Importar da planilha
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              className="rounded-md px-4 py-2 text-sm font-medium"
+              style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
+            >
+              + Nova atribuição
+            </button>
+          </div>
         )}
       </div>
+
+      {showImport && isCoordenador && (
+        <PersonnelImportPanel projectId={project.id} onImported={load} onClose={() => setShowImport(false)} />
+      )}
 
       {assignments.length === 0 ? (
         <p style={{ color: 'var(--color-text-muted)' }}>Nenhuma atribuição de pessoal cadastrada.</p>

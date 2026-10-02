@@ -98,7 +98,15 @@ def read_ledger(xlsx_path: str) -> LedgerResult:
     if not os.path.isfile(fs_path(xlsx_path)):
         raise LedgerError(f"Planilha não encontrada: {xlsx_path}")
 
-    workbook = openpyxl.load_workbook(fs_path(xlsx_path), data_only=True, read_only=True)
+    try:
+        workbook = openpyxl.load_workbook(fs_path(xlsx_path), data_only=True, read_only=True)
+    except PermissionError as exc:
+        # visto na prática: com a planilha aberta no Excel, o Windows trava o arquivo
+        raise LedgerError(
+            "Não foi possível abrir a planilha — ela está aberta no Excel? Feche-a e tente de novo."
+        ) from exc
+    except Exception as exc:  # zip corrompido, não é xlsx de verdade...
+        raise LedgerError(f"Não foi possível abrir a planilha: {exc}") from exc
     entries: dict[str, LedgerEntry] = {}
     skipped: list[str] = []
     try:
