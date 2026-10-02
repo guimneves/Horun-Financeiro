@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { budgetApi, type BudgetImportPreview } from '../../api/budget'
 import { MoneyValue } from '../common/MoneyValue'
+import { uploadErrorMessage } from '../../lib/uploadError'
 
 const card = { borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }
 const input = { borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }
@@ -33,7 +34,7 @@ export function BudgetImportPanel({
     try {
       setPreview(await budgetApi.importPreview(projectId, file))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao ler a planilha.')
+      setError(uploadErrorMessage(err, 'Erro ao ler a planilha.'))
     } finally {
       setBusy(false)
     }
@@ -47,7 +48,7 @@ export function BudgetImportPanel({
       const result = await budgetApi.importBudget(projectId, file, label.trim(), effectiveDate)
       onImported(result.revision.id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao importar.')
+      setError(uploadErrorMessage(err, 'Erro ao importar.'))
     } finally {
       setBusy(false)
     }

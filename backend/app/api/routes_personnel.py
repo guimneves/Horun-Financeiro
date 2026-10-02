@@ -5,6 +5,7 @@ armazenado — ver services/accrual.py) e recibos mensais anexados.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlmodel import Session, select
@@ -25,10 +26,15 @@ from app.schemas.personnel import (
     AssignmentUpdate,
     CloseAssignmentRequest,
     PersonCreate,
+    PersonnelImportPreviewOut,
+    PersonnelImportResultOut,
+    PersonnelImportRowOut,
     PersonOut,
 )
 from app.services.accrual import compute_accrual
 from app.services.audit import record_event
+from app.services.budget_import import BudgetImportError
+from app.services.personnel_import import PersonnelSheetResult, parse_personnel_sheet
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["personnel"])
 
@@ -315,3 +321,132 @@ def delete_assignment_document(
     delete_file(doc.storage_path)
     session.delete(doc)
     session.commit()
+
+
+# ------------------------------------------------- importar da planilha
+
+
+async def _parse_personnel_upload(file: UploadFile) -> PersonnelSheetResult:
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Envie a planilha de acompanhamento (.xlsx).")
+    content, _digest = await read_upload_limited(file)
+    try:
+        return parse_personnel_sheet(content)
+    except BudgetImportError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+def _personnel_positions(session: Session, project_id: int) -> dict[int, BudgetPosition]:
+    return {
+        p.item_number: p
+        for p in session.exec(
+            select(BudgetPosition).where(BudgetPosition.project_id == project_id, BudgetPosition.category == "equipe_executora")
+        ).all()
+    }
+
+
+def _existing_keys(session: Session, project_id: int) -> set[tuple[str, int, date]]:
+    people = {p.id: p.full_name.casefold() for p in session.exec(select(Person).where(Person.project_id == project_id)).all()}
+    return {
+        (people.get(a.person_id, ""), a.budget_position_id, a.start_date)
+        for a in session.exec(select(PersonnelAssignment).where(PersonnelAssignment.project_id == project_id)).all()
+    }
+
+
+@router.post("/personnel-import/preview", response_model=PersonnelImportPreviewOut)
+async def preview_personnel_import(
+    project_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(require_coordenador),
+):
+    """Lê a aba "Equipe Executora" e mostra quem seria cadastrado em cada
+    vaga, com o realizado da planilha ao lado do calculado pelo módulo —
+    não grava nada."""
+    result = await _parse_personnel_upload(file)
+    positions = _personnel_positions(session, project_id)
+    existing = _existing_keys(session, project_id)
+    today = date.today()
+    rows: list[PersonnelImportRowOut] = []
+    for a in result.assignments:
+        position = positions.get(a.item_number)
+        accrual = compute_accrual(
+            start_date=a.start_date, end_date=a.end_date, status=a.status, monthly_rate=a.monthly_rate, today=today
+        )
+        rows.append(PersonnelImportRowOut(
+            item_number=a.item_number, role_title=a.role_title, person_name=a.person_name, status=a.status,
+            start_date=a.start_date, end_date=a.end_date, monthly_rate=a.monthly_rate, sheet_value=a.sheet_value,
+            accrued_value=accrual.accrued_value, sheet_row=a.sheet_row,
+            position_found=position is not None,
+            already_imported=position is not None
+            and (a.person_name.casefold(), position.id, a.start_date) in existing,
+        ))
+    return PersonnelImportPreviewOut(
+        rows=rows,
+        warnings=result.warnings,
+        sheet_total=sum((r.sheet_value or Decimal("0") for r in rows), Decimal("0")),
+        accrued_total=sum((r.accrued_value for r in rows), Decimal("0")),
+    )
+
+
+@router.post("/personnel-import", response_model=PersonnelImportResultOut, status_code=status.HTTP_201_CREATED)
+async def import_personnel(
+    project_id: int,
+    file: UploadFile = File(...),
+    identity: HorunIdentity = Depends(get_identity),
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(require_coordenador),
+):
+    """Cadastra as pessoas e as atribuições da aba "Equipe Executora".
+    Idempotente: a mesma pessoa, na mesma vaga, com o mesmo início, não é
+    cadastrada de novo. Vaga que não existe no orçamento fica de fora (com
+    aviso) — importe o orçamento antes."""
+    result = await _parse_personnel_upload(file)
+    positions = _personnel_positions(session, project_id)
+    existing = _existing_keys(session, project_id)
+    people = {p.full_name.casefold(): p for p in session.exec(select(Person).where(Person.project_id == project_id)).all()}
+    warnings = list(result.warnings)
+    people_created = assignments_created = skipped = 0
+
+    for a in result.assignments:
+        position = positions.get(a.item_number)
+        if position is None:
+            warnings.append(
+                f"Linha {a.sheet_row}: vaga {a.item_number} ({a.person_name}) não existe na Equipe Executora do "
+                "orçamento — importe o orçamento antes."
+            )
+            skipped += 1
+            continue
+        key = (a.person_name.casefold(), position.id, a.start_date)
+        if key in existing:
+            skipped += 1
+            continue
+        person = people.get(a.person_name.casefold())
+        if person is None:
+            person = Person(project_id=project_id, full_name=a.person_name)
+            session.add(person)
+            session.flush()
+            people[a.person_name.casefold()] = person
+            people_created += 1
+        assignment = PersonnelAssignment(
+            project_id=project_id, person_id=person.id, budget_position_id=position.id, role_title=a.role_title,
+            monthly_rate=a.monthly_rate, start_date=a.start_date, end_date=a.end_date, status=a.status,
+            created_by_user_id=identity.user_id,
+        )
+        session.add(assignment)
+        session.flush()
+        record_event(
+            session,
+            project_id=project_id,
+            entity_type="personnel_assignment",
+            entity_id=assignment.id,
+            action="importado_da_planilha",
+            actor=identity,
+            detail={"linha": a.sheet_row, "vaga": a.item_number, "situacao": a.status},
+        )
+        existing.add(key)
+        assignments_created += 1
+    session.commit()
+    return PersonnelImportResultOut(
+        people_created=people_created, assignments_created=assignments_created, skipped=skipped, warnings=warnings,
+    )

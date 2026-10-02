@@ -11,7 +11,47 @@ export interface AssignmentCreateInput {
   start_date: string
 }
 
+export interface PersonnelImportRow {
+  item_number: number
+  role_title: string
+  person_name: string
+  status: 'ativo' | 'encerrado'
+  start_date: string
+  end_date: string | null
+  monthly_rate: string
+  sheet_value: string | null
+  accrued_value: string
+  sheet_row: number
+  position_found: boolean
+  already_imported: boolean
+}
+
+export interface PersonnelImportPreview {
+  rows: PersonnelImportRow[]
+  warnings: string[]
+  sheet_total: string
+  accrued_total: string
+}
+
+export interface PersonnelImportResult {
+  people_created: number
+  assignments_created: number
+  skipped: number
+  warnings: string[]
+}
+
+function sheetForm(file: File): FormData {
+  const form = new FormData()
+  form.append('file', file)
+  return form
+}
+
 export const personnelApi = {
+  /** aba "Equipe Executora" da planilha — não grava nada */
+  importPreview: (projectId: number, file: File) =>
+    api.postForm<PersonnelImportPreview>(`/projects/${projectId}/personnel-import/preview`, sheetForm(file)),
+  importPersonnel: (projectId: number, file: File) =>
+    api.postForm<PersonnelImportResult>(`/projects/${projectId}/personnel-import`, sheetForm(file)),
   listPeople: (projectId: number) => api.get<Person[]>(`/projects/${projectId}/personnel`),
   createPerson: (projectId: number, fullName: string) =>
     api.post<Person>(`/projects/${projectId}/personnel`, { full_name: fullName }),

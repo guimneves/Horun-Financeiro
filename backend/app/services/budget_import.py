@@ -15,8 +15,15 @@ O cabeçalho muda de seção para seção: equipamentos, diárias, outros bens e
 protótipos têm "V. unitário" e "Quant."; obras, passagens, material de
 consumo, serviços e outras despesas só "Valor (R$)" (aí o item entra com
 quantidade 1 e valor unitário = valor). Por isso as colunas são achadas
-pelo título, nunca pela posição. A Equipe Executora fica de fora: é
-pessoal, com tela própria.
+pelo título, nunca pela posição.
+
+Equipe Executora: a PRIMEIRA tabela dela vira itens da categoria (uma vaga
+por linha: "Membro da Equipe", valor total mensal = valor + encargos, por
+"Período (em meses)"); quem ocupa cada vaga vem da aba "Equipe Executora"
+(`services/personnel_import.py`). Uma segunda tabela de Equipe Executora
+(a planilha real tem uma, com `#REF!`) é ignorada, com aviso. Um nº que
+junta vagas ("11, 22, 23, 24") vira a vaga do primeiro número, e as linhas
+avulsas desses números saem (são os valores antigos da mesma pessoa).
 
 Nada é gravado aqui: `parse_budget_sheet` só devolve o plano; quem grava é
 a rota (numa revisão NOVA, em rascunho, para conferir antes de ativar).
@@ -37,7 +44,7 @@ SHEET_NAME = "Saldo por Item"
 # (trecho do título, sem acento e minúsculo) -> categoria. Ordem importa:
 # o primeiro que casar vale ("importad" antes do nacional de cada grupo).
 _SECTION_RULES: list[tuple[tuple[str, ...], str | None]] = [
-    (("equipe executora",), None),  # pessoal: fora da importação
+    (("equipe executora",), "equipe_executora"),
     (("equipamento", "importad"), "equip_importado"),
     (("equipamento",), "equip_nacional"),
     (("obras",), "obras_instalacoes"),
@@ -70,13 +77,20 @@ class ImportedItem:
     planned_value: Decimal
     yield_amount: Decimal
     sheet_row: int
+    note: str = ""
+    # vagas juntadas num nº só ("11, 22, 23, 24"): os outros números
+    merged_numbers: tuple[int, ...] = ()
 
 
 @dataclass
 class BudgetSheetResult:
     items: list[ImportedItem] = field(default_factory=list)
-    skipped_sections: list[str] = field(default_factory=list)  # ex. "Equipe Executora (pessoal — tela própria)"
+    skipped_sections: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+_PERSONNEL = "equipe_executora"
+_NUMBER_LIST = re.compile(r"\s*\d+(\s*,\s*\d+)+\s*")
 
 
 def _category_for(*titles: str | None) -> tuple[bool, str | None]:
@@ -121,6 +135,41 @@ def _columns(header: tuple) -> dict[str, int]:
     return cols
 
 
+def _personnel_columns(header: tuple) -> dict[str, int]:
+    """Cabeçalho da tabela de Equipe Executora: "Membro da Equipe" (ou
+    "Descrição do cargo"), "Profissional", "Tipo de Remuneração",
+    "Modalidade", "Período (em meses)", "Carga Horária Semanal", "Valor
+    Mensal", "Encargos", "Valor Total Mensal", "Valor Total"..."""
+    cols: dict[str, int] = {"number": 0}
+    for i, cell in enumerate(header):
+        if cell is None or i == 0:
+            continue
+        name = fold(str(cell))
+        if ("membro" in name or "descri" in name) and "description" not in cols:
+            cols["description"] = i
+        elif name.startswith("profissional"):
+            cols.setdefault("justification", i)
+        elif "tipo de remunera" in name:
+            cols.setdefault("pay_type", i)
+        elif name.startswith("modalidade"):
+            cols.setdefault("modality", i)
+        elif name.startswith("periodo"):
+            cols.setdefault("quantity", i)
+        elif "carga horaria semanal" in name:
+            cols.setdefault("hours", i)
+        elif name.startswith("valor total mensal"):
+            cols["unit"] = i
+        elif name.startswith("valor mensal"):
+            cols.setdefault("monthly", i)
+        elif name.startswith("valor total"):
+            cols.setdefault("value", i)
+        elif name.startswith("rendimento"):
+            cols.setdefault("yield", i)
+    if "unit" not in cols and "monthly" in cols:
+        cols["unit"] = cols["monthly"]
+    return cols
+
+
 def _number(raw, label: str, row_number: int, warnings: list[str]) -> Decimal:
     if raw is None or raw == "":
         return Decimal("0")
@@ -161,12 +210,12 @@ def parse_budget_sheet(content: bytes) -> BudgetSheetResult:
         workbook.close()
 
     result = BudgetSheetResult()
-    seen: set[tuple[str, int]] = set()
     element_title: str | None = None
     section_title: str | None = None
     cols: dict[str, int] | None = None
     category: str | None = None
     in_section = False
+    personnel_table_row: int | None = None
 
     for row_number, row in enumerate(rows, start=1):
         if not row or all(c is None or str(c).strip() == "" for c in row):
@@ -182,10 +231,17 @@ def parse_budget_sheet(content: bytes) -> BudgetSheetResult:
                 title = section_title or element_title or "(sem título)"
                 result.warnings.append(f'Linha {row_number}: seção "{title}" não corresponde a nenhuma categoria — ignorada.')
                 category = None
-            elif category is None:
-                label = "Equipe Executora (pessoal — cadastrada na tela de Pessoal)"
-                if label not in result.skipped_sections:
+            elif category == _PERSONNEL:
+                if personnel_table_row is not None:
+                    label = (
+                        f"Segunda tabela de Equipe Executora (linha {row_number}) — usada só a da linha "
+                        f"{personnel_table_row}"
+                    )
                     result.skipped_sections.append(label)
+                    category = None
+                else:
+                    personnel_table_row = row_number
+                    cols = _personnel_columns(row)
             if category is not None and (
                 cols.get("description") is None or (cols.get("value") is None and cols.get("unit") is None)
             ):
@@ -194,6 +250,17 @@ def parse_budget_sheet(content: bytes) -> BudgetSheetResult:
             continue
 
         number = _item_number(first)
+        merged: tuple[int, ...] = ()
+        if number is None and in_section and _NUMBER_LIST.fullmatch(first_text):
+            numbers = [int(n) for n in re.findall(r"\d+", first_text)]
+            if category == _PERSONNEL:
+                number, merged = numbers[0], tuple(numbers[1:])
+            else:
+                if category is not None:
+                    result.warnings.append(
+                        f"Linha {row_number}: nº {first_text!r} junta vários itens — não importado; lance-o à mão."
+                    )
+                continue
         if number is None and in_section and re.fullmatch(r"\d+[.,]\d+", first_text):
             # subitem ("1.1"): o orçamento só tem número inteiro por item.
             # Não encerra a seção (antes, tudo depois dele se perdia).
@@ -241,17 +308,55 @@ def parse_budget_sheet(content: bytes) -> BudgetSheetResult:
         else:
             unit, quantity, planned = value, Decimal("1.00"), value
 
-        key = (category, number)
-        if key in seen:
-            result.warnings.append(f"Linha {row_number}: item {number} repetido na mesma categoria — ignorado.")
-            continue
-        seen.add(key)
+        note = ""
+        if category == _PERSONNEL:
+            parts = [
+                str(cell(k)).strip() for k in ("pay_type", "modality") if cell(k) not in (None, "", "-")
+            ]
+            if cell("hours") not in (None, ""):
+                parts.append(f"{cell('hours')} h/semana")
+            note = " · ".join(p for p in parts if p and p != "-")
+
         result.items.append(ImportedItem(
             category=category, item_number=number, description=description, justification=justification,
             unit_value=unit, planned_quantity=quantity, planned_value=planned,
             yield_amount=round_money(_number(cell("yield"), "Rendimentos", row_number, result.warnings)),
-            sheet_row=row_number,
+            sheet_row=row_number, note=note, merged_numbers=merged,
         ))
+
+    _resolve_merged(result)
+    _drop_repeated(result)
     if not result.items:
         result.warnings.append(f'Nenhum item encontrado na aba "{SHEET_NAME}".')
     return result
+
+
+def _resolve_merged(result: BudgetSheetResult) -> None:
+    """Vaga com nº juntado ("11, 22, 23, 24"): ela é a vaga (do primeiro
+    número); as linhas avulsas com esses números, antes ou depois, saem."""
+    for merged_item in [i for i in result.items if i.merged_numbers]:
+        numbers = {merged_item.item_number, *merged_item.merged_numbers}
+        dropped = [
+            i for i in result.items
+            if i is not merged_item and i.category == merged_item.category and i.item_number in numbers
+        ]
+        if dropped:
+            result.items = [i for i in result.items if i not in dropped]
+        result.warnings.append(
+            f"Linha {merged_item.sheet_row}: vagas {', '.join(map(str, sorted(numbers)))} juntadas — importada como "
+            f"item {merged_item.item_number}"
+            + (f"; {len(dropped)} linha(s) avulsa(s) desses números não entraram." if dropped else ".")
+        )
+
+
+def _drop_repeated(result: BudgetSheetResult) -> None:
+    seen: set[tuple[str, int]] = set()
+    kept: list[ImportedItem] = []
+    for item in result.items:
+        key = (item.category, item.item_number)
+        if key in seen:
+            result.warnings.append(f"Linha {item.sheet_row}: item {item.item_number} repetido na mesma categoria — ignorado.")
+            continue
+        seen.add(key)
+        kept.append(item)
+    result.items = kept

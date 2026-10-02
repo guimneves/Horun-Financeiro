@@ -55,3 +55,32 @@ class AssignmentOut(BaseModel):
 
 class CloseAssignmentRequest(BaseModel):
     end_date: date
+
+
+class PersonnelImportRowOut(BaseModel):
+    item_number: int
+    role_title: str
+    person_name: str
+    status: str
+    start_date: date
+    end_date: date | None
+    monthly_rate: Decimal
+    sheet_value: Decimal | None  # realizado segundo a planilha
+    accrued_value: Decimal  # realizado calculado pelo módulo, até hoje
+    sheet_row: int
+    position_found: bool  # a vaga existe no orçamento do projeto
+    already_imported: bool  # mesma pessoa, vaga e início já cadastrados
+
+
+class PersonnelImportPreviewOut(BaseModel):
+    rows: list[PersonnelImportRowOut]
+    warnings: list[str]
+    sheet_total: Decimal
+    accrued_total: Decimal
+
+
+class PersonnelImportResultOut(BaseModel):
+    people_created: int
+    assignments_created: int
+    skipped: int
+    warnings: list[str]

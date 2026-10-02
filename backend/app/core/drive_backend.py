@@ -83,8 +83,15 @@ class LocalDrive(DriveBackend):
             raise DriveNotFound(f"Arquivo não encontrado no drive: {path}")
         if max_bytes is not None and os.path.getsize(target) > max_bytes:
             raise DriveError(f"Arquivo acima do limite de {max_bytes / 1024 / 1024:.0f} MB.")
-        with open(target, "rb") as handle:
-            return handle.read()
+        try:
+            with open(target, "rb") as handle:
+                return handle.read()
+        except PermissionError as exc:
+            # visto na prática: planilha aberta no Excel — o Windows trava o arquivo
+            raise DriveError(
+                f"Não foi possível abrir {path.rsplit('/', 1)[-1]} — está aberto no Excel ou em outro programa? "
+                "Feche-o e tente de novo."
+            ) from exc
 
     def local_path(self, path: str) -> str | None:
         target = fs_path(safe_join(self.root, path))

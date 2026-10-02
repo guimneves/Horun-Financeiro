@@ -17,6 +17,9 @@ HEADER_UNIT = ["Nº", "Descrição do item", "Finalidade/ Justificativa", "V. un
                "Rendimentos", "Quant. Disponível", "Valor Realizado (R$)", "Saldo do Item (R$)"]
 HEADER_VALUE = ["Nº", "Descrição do item", "Finalidade/ Justificativa", "Valor (R$)", "Rendimentos",
                 "Valor Realizado (R$)", "Saldo do Item (R$)"]
+HEADER_PERSONNEL = ["Nº", "Membro da Equipe", "Profissional", "Tipo de Remuneração (3)", "Modalidade (4)",
+                    "Período (em meses)", "Carga Horária Semanal", "Valor Mensal (R$)", "Encargos",
+                    "Valor Total Mensal\n(R$)", "Valor Total\n(R$)", "Quantidade Utilizada"]
 
 
 def _sheet() -> bytes:
@@ -37,8 +40,17 @@ def _sheet() -> bytes:
         ["VALOR TOTAL DO ELEMENTO DE DESPESA"],
         [None, None, None, None, None, None, "Rendimentos"],
         ["Elemento de Despesa: Equipe Executora"],
-        ["Nº", "Membro da Equipe", "Profissional", "Tipo de Remuneração (3)"],
-        [1, "Fulano", "Pesquisador", "Bolsa"],
+        HEADER_PERSONNEL,
+        [1, "Vaga técnico A", "Técnico", "Ressarcimento - HH", "-", 24, 5, 500, 100, 600, 14400, 3],
+        [2, "PD - Vaga B", "PD - Fulana", "Bolsa de pesquisa", "BOLSA - PÓS-DOUTORADO", 12, 40, 7000, 0, 7000, 84000, 2],
+        [5, "Pessoa C", "Tec", "Remuneração Direta", "-", None, 40, 4000, 3000, 7000, 0, 0],  # valor antigo
+        [6, "Pessoa C", "Tec", "Remuneração Direta", "-", None, 40, 4200, 3100, 7300, 0, 0],  # valor antigo
+        [7, None, None, None, None, None, None, None, None, 0, 0, 0],
+        ["5, 6", "Pessoa C", "Tec - C", "Remuneração Direta", "-", 10, 40, 4400, 3200, 7600, 76000, 1],
+        ["VALOR TOTAL DO ELEMENTO DE DESPESA"],
+        ["Elemento de Despesa: Equipe Executora"],  # segunda tabela (plano antigo): ignorada
+        ["Nº", "Descrição do cargo (1)", "Finalidade/ Justificativa (2)", "Tipo de Remuneração (3)", "Valor Total"],
+        [1, "Cargo antigo", "Algo", "Bolsa", 999],
         ["VALOR TOTAL DO ELEMENTO DE DESPESA"],
         ["Elemento de Despesa: Serviços de Terceiros"],
         ["OUTRAS DESPESAS COM SERVIÇOS DE TERCEIROS (Pessoa Jurídica)"],
@@ -64,6 +76,7 @@ def test_parse_reads_every_section_by_its_own_header():
     got = {(i.category, i.item_number): i for i in result.items}
     assert set(got) == {
         ("equip_nacional", 1), ("equip_nacional", 2), ("equip_importado", 1),
+        ("equipe_executora", 1), ("equipe_executora", 2), ("equipe_executora", 5),
         ("servicos_terceiros", 1), ("servicos_terceiros", 2), ("servicos_terceiros", 3),
         ("diarias", 1),
     }
@@ -77,12 +90,24 @@ def test_parse_reads_every_section_by_its_own_header():
     assert got[("diarias", 1)].planned_value == Decimal("3000")
 
 
+def test_personnel_vacancies_use_monthly_total_times_months():
+    got = {(i.category, i.item_number): i for i in parse_budget_sheet(_sheet()).items}
+    tech = got[("equipe_executora", 1)]
+    assert (tech.unit_value, tech.planned_quantity, tech.planned_value) == (Decimal("600"), Decimal("24.00"), Decimal("14400"))
+    assert tech.description == "Vaga técnico A" and tech.justification == "Técnico"
+    assert "Ressarcimento - HH" in tech.note and "5 h/semana" in tech.note
+    # vagas juntadas: fica a do 1º número, com o valor consolidado; as avulsas saem
+    merged = got[("equipe_executora", 5)]
+    assert merged.planned_value == Decimal("76000") and ("equipe_executora", 6) not in got
+
+
 def test_parse_reports_what_it_could_not_import():
     result = parse_budget_sheet(_sheet())
-    assert result.skipped_sections == ["Equipe Executora (pessoal — cadastrada na tela de Pessoal)"]
+    assert result.skipped_sections == ["Segunda tabela de Equipe Executora (linha 23) — usada só a da linha 14"]
     assert any("subitem 1.1" in w and "500" in w for w in result.warnings)
     assert any("item 1" in w and "49000" in w for w in result.warnings)  # V. unitário × Quant. ≠ Valor
-    assert len(result.warnings) == 2
+    assert any("vagas 5, 6 juntadas" in w for w in result.warnings)
+    assert len(result.warnings) == 3
 
 
 def test_sheet_without_the_tab_is_refused():
@@ -122,7 +147,7 @@ def test_import_creates_a_draft_revision_with_all_items(client):
     r = _upload(client, f"/projects/{project['id']}/budget-import", label="Reformulação 3", effective_date="2026-01-01")
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["items_created"] == 7 and body["revision"]["status"] == "rascunho"
+    assert body["items_created"] == 10 and body["revision"]["status"] == "rascunho"
     revision_id = body["revision"]["id"]
     items = client.get(f"/projects/{project['id']}/revisions/{revision_id}/items", headers=ADMIN).json()
     assert {(i["category"], i["item_number"]) for i in items} >= {("equip_nacional", 1), ("diarias", 1)}

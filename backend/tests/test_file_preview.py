@@ -56,3 +56,36 @@ def test_purchase_document_preview(client, drive):  # noqa: F811
     url = f"/projects/{project['id']}/purchase-processes/{process['id']}/documents/{pdf['id']}/download"
     assert client.get(url, params={"inline": "true"}, headers=COLAB).headers["content-disposition"].startswith("inline")
     assert client.get(url, headers=COLAB).headers["content-disposition"].startswith("attachment")
+
+
+def test_ledger_open_in_excel_gives_a_clear_message(client, drive, monkeypatch):  # noqa: F811
+    import openpyxl
+
+    def locked(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(openpyxl, "load_workbook", locked)
+    project = _project_with_budget(client)
+    r = client.post(
+        f"/projects/{project['id']}/drive/scan", json={"ledger_path": "0_Saldo por item/saldo.xlsx"}, headers=ADMIN
+    )
+    assert r.status_code == 422 and "aberta no Excel" in r.json()["detail"]
+
+
+def test_ledger_file_locked_by_excel_gives_a_clear_message(client, drive, monkeypatch):  # noqa: F811
+    # no modo local da wip, a planilha é lida pelo LocalDrive (bytes) antes do openpyxl
+    import builtins
+
+    real_open = builtins.open
+
+    def locked_open(file, mode="r", *args, **kwargs):
+        if "saldo.xlsx" in str(file) and "b" in mode:
+            raise PermissionError(13, "Permission denied")
+        return real_open(file, mode, *args, **kwargs)
+
+    project = _project_with_budget(client)
+    monkeypatch.setattr(builtins, "open", locked_open)
+    r = client.post(
+        f"/projects/{project['id']}/drive/scan", json={"ledger_path": "0_Saldo por item/saldo.xlsx"}, headers=ADMIN
+    )
+    assert r.status_code == 422 and "aberto no Excel" in r.json()["detail"]

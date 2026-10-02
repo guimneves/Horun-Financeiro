@@ -492,6 +492,7 @@ async def import_budget(
             planned_quantity=imported.planned_quantity,
             planned_value=imported.planned_value,
             yield_amount=imported.yield_amount,
+            note=imported.note,
         ))
     session.commit()
     session.refresh(revision)
