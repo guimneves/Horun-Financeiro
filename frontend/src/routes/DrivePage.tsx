@@ -12,6 +12,7 @@ const ACTION_LABELS: Record<string, string> = {
   criar_da_planilha: 'Criar (só na planilha)',
   criar_sem_numero: 'Criar (lançamento sem nº)',
   preencher_valor: 'Preencher valor',
+  corrigir_item: 'Passar para o item da planilha',
   existe: 'Já existe',
   sem_item_no_orcamento: 'Item fora do orçamento',
   duplicado_na_pasta: 'Duplicado na pasta',
@@ -23,6 +24,7 @@ const SUMMARY_LABELS: [string, string][] = [
   ['a_criar_so_planilha', 'A criar (só na planilha)'],
   ['a_criar_sem_numero', 'Lançamentos sem nº de processo'],
   ['valores_a_preencher', 'Valores a preencher'],
+  ['itens_a_corrigir', 'Itens a corrigir (planilha)'],
   ['ja_existentes', 'Já existentes'],
   ['sem_item_no_orcamento', 'Item fora do orçamento'],
   ['arquivos_novos', 'Arquivos a vincular'],
@@ -35,7 +37,8 @@ const fileSize = (bytes: number | null) =>
 
 // processos a criar + processos que já existem com R$ 0 e recebem o valor
 const pending = (s: Record<string, number>) =>
-  (s.a_criar ?? 0) + (s.a_criar_so_planilha ?? 0) + (s.a_criar_sem_numero ?? 0) + (s.valores_a_preencher ?? 0)
+  (s.a_criar ?? 0) + (s.a_criar_so_planilha ?? 0) + (s.a_criar_sem_numero ?? 0) + (s.valores_a_preencher ?? 0) +
+  (s.itens_a_corrigir ?? 0)
 
 const card = { borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }
 const input = { borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }
@@ -113,7 +116,9 @@ function SyncPanel({ projectId }: { projectId: number }) {
     if (!report) return
     const s = report.summary
     const fill = s.valores_a_preencher ? `, preencher o valor de ${s.valores_a_preencher}` : ''
-    if (!window.confirm(`Criar ${pending(s) - (s.valores_a_preencher ?? 0)} processo(s)${fill} e vincular ${s.arquivos_novos} arquivo(s)? Nada no drive é alterado.`)) return
+    const move = s.itens_a_corrigir ? `, passar ${s.itens_a_corrigir} para o item da planilha` : ''
+    const create = pending(s) - (s.valores_a_preencher ?? 0) - (s.itens_a_corrigir ?? 0)
+    if (!window.confirm(`Criar ${create} processo(s)${fill}${move} e vincular ${s.arquivos_novos} arquivo(s)? Nada no drive é alterado.`)) return
     setBusy(true)
     setError(null)
     try {
@@ -128,7 +133,7 @@ function SyncPanel({ projectId }: { projectId: number }) {
 
   const rows =
     report?.processes.filter(
-      (p) => filter === 'todos' || (filter === 'criar' ? p.action.startsWith('criar') || p.action === 'preencher_valor' : p.action === filter),
+      (p) => filter === 'todos' || (filter === 'criar' ? p.action.startsWith('criar') || p.action === 'preencher_valor' || p.action === 'corrigir_item' : p.action === filter),
     ) ?? []
   const visibleRows = showAll ? rows : rows.slice(0, 50)
   const toCreate = report ? pending(report.summary) : 0
@@ -168,7 +173,8 @@ function SyncPanel({ projectId }: { projectId: number }) {
       {result && (
         <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#dcfce7', color: '#166534' }}>
           Sincronizado: {result.processos_criados} processo(s) criado(s)
-          {result.valores_preenchidos ? `, ${result.valores_preenchidos} valor(es) preenchido(s)` : ''} e{' '}
+          {result.valores_preenchidos ? `, ${result.valores_preenchidos} valor(es) preenchido(s)` : ''}
+          {result.itens_corrigidos ? `, ${result.itens_corrigidos} passado(s) para o item da planilha` : ''} e{' '}
           {result.arquivos_vinculados} arquivo(s) vinculado(s).
         </p>
       )}

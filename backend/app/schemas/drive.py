@@ -21,7 +21,7 @@ class ProcessPlanOut(BaseModel):
     title: str
     cancelled: bool
     inferred_status: str
-    # criar | criar_da_planilha | criar_sem_numero | existe | preencher_valor |
+    # criar | criar_da_planilha | criar_sem_numero | existe | preencher_valor | corrigir_item |
     # sem_item_no_orcamento | duplicado_na_pasta
     action: str
     value: Decimal
@@ -47,6 +47,7 @@ class ScanReportOut(BaseModel):
 class SyncResultOut(BaseModel):
     processos_criados: int
     valores_preenchidos: int = 0  # processos que estavam com R$ 0 e receberam o valor da planilha
+    itens_corrigidos: int = 0  # processos que passaram do item da pasta para o da planilha
     arquivos_vinculados: int
     summary: dict[str, int]  # o plano que foi aplicado
 

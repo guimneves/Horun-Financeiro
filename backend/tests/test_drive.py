@@ -473,3 +473,74 @@ def test_drive_unavailable_is_reported_not_crashing(client, monkeypatch):
     status = client.get(f"/projects/{project['id']}/drive/status", headers=ADMIN).json()
     assert status["configured"] is False and status["available"] is False
     assert client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).status_code == 409
+
+
+@pytest.fixture
+def moved_drive(tmp_path, monkeypatch):
+    """Pasta do processo no Item 1, planilha lançando no Item 2."""
+    monkeypatch.setattr(settings, "drive_root", str(tmp_path))
+    project = tmp_path / "Proj"
+    _touch(project / "Material de consumo - Nacional" / "Item 1 - Tubos" / "2024-5005 Reagente" / "autorizacao_de_fornecimento.pdf")
+    (project / "0_Saldo por item").mkdir(parents=True)
+    return project
+
+
+def _ledger_with_item(project, item):
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Material de Consumo"
+    sheet.append(["Material de Consumo Nacional"])
+    sheet.append(["Item", "Nº do Item", "Favorecido", "Descrição", "Valor", "No de Processo COPPETEC"])
+    sheet.append(["x", item, "Loja", "Reagente", 300, "2024 5005"])
+    workbook.save(project / "0_Saldo por item" / "saldo.xlsx")
+
+
+def _project_with_items_1_and_2(client):
+    project = client.post("/projects", json={"code": "25.465", "name": "Teste"}, headers=ADMIN).json()
+    revision = client.post(
+        f"/projects/{project['id']}/revisions", json={"label": "Baseline", "effective_date": "2024-01-01"}, headers=ADMIN
+    ).json()
+    for number in (1, 2):
+        client.post(
+            f"/projects/{project['id']}/revisions/{revision['id']}/items",
+            json={"category": "material_consumo_nacional", "item_number": number, "description": f"Item {number}",
+                  "unit_value": "1000", "planned_quantity": "1"},
+            headers=ADMIN,
+        )
+    client.post(f"/projects/{project['id']}/revisions/{revision['id']}/activate", headers=ADMIN)
+    client.patch(f"/projects/{project['id']}", json={"drive_folder": "Proj"}, headers=ADMIN)
+    return project
+
+
+def _item_of(client, project, number):
+    process = next(p for p in client.get(f"/projects/{project['id']}/purchase-processes", headers=ADMIN).json()
+                   if p["process_number"] == number)
+    balance = client.get(f"/projects/{project['id']}/balance", headers=ADMIN).json()
+    return next(b["item_number"] for b in balance if b["position_id"] == process["budget_position_id"])
+
+
+def test_item_number_comes_from_the_ledger_not_the_folder(client, moved_drive):
+    _ledger_with_item(moved_drive, 2)
+    project = _project_with_items_1_and_2(client)
+    report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
+    plan = next(p for p in report["processes"] if p["process_number"] == "2024-5005")
+    assert plan["item_number"] == 2 and any("SIGITEC" in w for w in plan["warnings"])
+    client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN)
+    assert _item_of(client, project, "2024-5005") == 2
+
+
+def test_resync_moves_processes_imported_into_the_folder_item(client, moved_drive):
+    _ledger_with_item(moved_drive, 1)  # primeiro a planilha concorda com a pasta
+    project = _project_with_items_1_and_2(client)
+    client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN)
+    assert _item_of(client, project, "2024-5005") == 1
+
+    _ledger_with_item(moved_drive, 2)  # sincronização antiga: processo ficou no item da pasta
+    report = client.post(f"/projects/{project['id']}/drive/scan", json={}, headers=ADMIN).json()
+    assert report["summary"]["itens_a_corrigir"] == 1
+    result = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert result["itens_corrigidos"] == 1 and _item_of(client, project, "2024-5005") == 2
+    again = client.post(f"/projects/{project['id']}/drive/sync", json={}, headers=ADMIN).json()
+    assert again["itens_corrigidos"] == 0

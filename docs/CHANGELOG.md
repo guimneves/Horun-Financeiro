@@ -9,10 +9,23 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 200 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 202 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Item da planilha (SIGITEC) e Orçamento por categoria
+
+- **Vale o "Nº do Item" da planilha**, não o "Item N" da pasta (decisão do
+  usuário: a numeração da planilha corresponde 1 a 1 à do SIGITEC). Processo
+  novo entra no item da planilha, com aviso; processo já importado que ficou
+  no item da pasta passa para o da planilha na próxima sincronização
+  ("Itens a corrigir"; só se ninguém trocou o item à mão). Conferido com a
+  planilha real: os 274 itens de despesa batem ao centavo.
+- **Orçamento por categoria**: a aba mostra primeiro as categorias (totais,
+  itens com saldo negativo, % usado); cada uma se expande nos itens.
+- Pendente: subitem ("1.1") é uma linha própria do orçamento, diferente do
+  item 1 — hoje o gasto dele cai no item 1 e o previsto dele não é importado.
 
 ## 02/10/2026 — Sincronização bate com a planilha, categoria a categoria
 

@@ -9,15 +9,20 @@ Dois passos separados, de propósito:
 
 Idempotente: o processo é identificado pelo nº COPPETEC (ou, nos lançamentos
 sem nº, pela identidade da linha da planilha); rodar de novo só acrescenta os
-arquivos novos, sem duplicar. A única alteração em processo existente: o que
-entrou com R$ 0 (sincronizado sem a planilha) recebe o valor da planilha. Os
+arquivos novos, sem duplicar. Alterações em processo existente importado do
+drive: o que entrou com R$ 0 (sincronizado sem a planilha) recebe o valor da
+planilha; e o que está no item da pasta passa para o item da planilha.
+
+Item: vale o "Nº do Item" (e a categoria) da PLANILHA, não o da pasta — a
+numeração da planilha corresponde 1 a 1 à do SIGITEC (decisão do usuário,
+02/10/2026); as pastas às vezes guardam o processo em outro "Item N". Os
 arquivos NÃO são copiados — o documento aponta para o arquivo no drive.
 """
 
 from __future__ import annotations
 
 import mimetypes
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -44,6 +49,7 @@ class ProcessPlan:
     # criar | criar_da_planilha (só existe na planilha, sem pasta) |
     # criar_sem_numero (linha da planilha sem nº de processo) | existe |
     # preencher_valor (existe com R$ 0 e a planilha tem o valor) |
+    # corrigir_item (existe no item da pasta; passa para o item da planilha) |
     # sem_item_no_orcamento | duplicado_na_pasta
     action: str
     status: str = ""  # estado com que o processo será criado (vem da pasta, ajustado pela planilha)
@@ -56,6 +62,7 @@ class ProcessPlan:
     value_source: str = "pendente"  # planilha | pendente | cancelado
     warnings: list[str] = field(default_factory=list)
     unnumbered: UnnumberedEntry | None = None  # só em criar_sem_numero
+    move_to_position_id: int | None = None  # processo existente que passa para o item da planilha
 
 
 @dataclass
@@ -73,6 +80,7 @@ class SyncPlan:
             "a_criar_so_planilha": 0,
             "a_criar_sem_numero": 0,
             "valores_a_preencher": 0,
+            "itens_a_corrigir": 0,
             "ja_existentes": 0,
             "sem_item_no_orcamento": 0,
             "duplicados_na_pasta": 0,
@@ -87,12 +95,15 @@ class SyncPlan:
             "criar_da_planilha": "a_criar_so_planilha",
             "criar_sem_numero": "a_criar_sem_numero",
             "preencher_valor": "valores_a_preencher",
+            "corrigir_item": "ja_existentes",
             "existe": "ja_existentes",
             "sem_item_no_orcamento": "sem_item_no_orcamento",
             "duplicado_na_pasta": "duplicados_na_pasta",
         }
         for item in self.items:
             counts[key[item.action]] += 1
+            if item.move_to_position_id is not None:
+                counts["itens_a_corrigir"] += 1
             counts["arquivos_novos"] += item.new_files
             if item.action == "criar" and item.value_source == "pendente":
                 counts["sem_valor"] += 1
@@ -120,6 +131,20 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
             known_paths.setdefault(doc.purchase_process_id, set()).add(doc.storage_path)  # type: ignore[arg-type]
 
     entries = ledger.entries if ledger else {}
+    position_label = {pid: key for key, pid in positions.items()}
+
+    def ledger_position(entry) -> int | None:
+        if entry is None or entry.item_number is None:
+            return None
+        return positions.get((entry.category, entry.item_number))
+
+    def item_warning(scanned: ScannedProcess, entry) -> str:
+        where = "" if entry.category == scanned.category else f" de outra categoria ({entry.category})"
+        return (
+            f"A pasta está no Item {scanned.item_number}; a planilha lança no Item {entry.item_number}{where} "
+            "— vale a planilha (numeração do SIGITEC)."
+        )
+
     used_ledger: set[str] = set()
     seen: set[str] = set()
     items: list[ProcessPlan] = []
@@ -153,10 +178,32 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
                     plan.vendor = entry.vendor
                     plan.value_source = "planilha"
                     plan.warnings.append("Entrou antes com R$ 0 — recebe agora o valor da planilha.")
+                target = ledger_position(entry)
+                folder_position = positions.get((scanned.category, scanned.item_number))
+                # só move o que ainda está onde a pasta o pôs — se alguém trocou
+                # o item à mão depois, a escolha da pessoa fica
+                if (
+                    target is not None
+                    and process.origin == "drive_import"
+                    and process.budget_position_id != target
+                    and process.budget_position_id == folder_position
+                ):
+                    plan.move_to_position_id = target
+                    if plan.action == "existe":
+                        plan.action = "corrigir_item"
+                    plan.warnings.append(item_warning(scanned, entry))
+                    category, number_ = position_label[target]
+                    plan.scanned = replace(scanned, category=category, item_number=number_)
             items.append(plan)
             continue
 
+        entry = entries.get(number)
         plan.position_id = positions.get((scanned.category, scanned.item_number))
+        target = None if scanned.cancelled else ledger_position(entry)
+        if target is not None and target != plan.position_id:
+            plan.warnings.append(item_warning(scanned, entry))
+            plan.position_id = target
+            plan.scanned = replace(scanned, category=entry.category, item_number=entry.item_number)
         if plan.position_id is None:
             plan.action = "sem_item_no_orcamento"
             plan.warnings.append(
@@ -168,7 +215,6 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
 
         plan.new_files = len(scanned.files)
         plan.status = scanned.inferred_status
-        entry = entries.get(number)
         if scanned.cancelled:
             plan.value_source = "cancelado"
             if entry is not None:
@@ -185,9 +231,10 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
                 # "realizado": não faz sentido deixá-lo só como comprometido.
                 plan.status = "autorizado"
                 plan.warnings.append("Está lançado na planilha, então entra como autorizado (realizado).")
-            if entry.category != scanned.category:
+            if entry.category != scanned.category and target is None:
                 plan.warnings.append(
-                    f"A planilha lança este processo em outra categoria ({entry.category}); vale a da pasta."
+                    f"A planilha lança este processo em outra categoria ({entry.category}), num item que não "
+                    "existe no orçamento; fica no da pasta."
                 )
             if entry.lines > 1:
                 plan.warnings.append(f"Valor somado de {entry.lines} linhas da planilha.")
@@ -294,11 +341,26 @@ def _status_with_value(status: str) -> str:
 def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunIdentity) -> dict[str, int]:
     created = 0
     filled = 0
+    moved = 0
     files_added = 0
     now = datetime.now(timezone.utc)
 
     for item in plan.items:
         scanned = item.scanned
+        if item.move_to_position_id is not None:
+            process = session.get(PurchaseProcess, item.existing_process_id)
+            if process is not None:
+                previous_position = process.budget_position_id
+                process.budget_position_id = item.move_to_position_id
+                process.updated_at = now
+                session.add(process)
+                moved += 1
+                record_event(
+                    session, project_id=project.id, entity_type="purchase_process", entity_id=process.id,
+                    action="item_da_planilha", actor=actor,
+                    detail={"posicao_de": previous_position, "posicao_para": item.move_to_position_id,
+                            "item": f"{item.scanned.category} Nº {item.scanned.item_number}"},
+                )
         if item.action == "preencher_valor":
             process = session.get(PurchaseProcess, item.existing_process_id)
             if process is not None and _without_value(process):
@@ -371,7 +433,7 @@ def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunI
                 },
             )
             known: set[str] = set()
-        elif item.action == "existe":
+        elif item.action in ("existe", "corrigir_item"):
             process_id = item.existing_process_id
             known = {
                 d.storage_path
@@ -412,9 +474,12 @@ def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunI
         action="sincronizacao_com_o_drive",
         actor=actor,
         detail={
-            "processos_criados": created, "valores_preenchidos": filled,
+            "processos_criados": created, "valores_preenchidos": filled, "itens_corrigidos": moved,
             "arquivos_vinculados": files_added, "resumo": summary,
         },
     )
     session.commit()
-    return {"processos_criados": created, "valores_preenchidos": filled, "arquivos_vinculados": files_added}
+    return {
+        "processos_criados": created, "valores_preenchidos": filled,
+        "itens_corrigidos": moved, "arquivos_vinculados": files_added,
+    }

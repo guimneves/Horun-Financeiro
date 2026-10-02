@@ -32,6 +32,7 @@ export interface ScanReport {
 export interface SyncResult {
   processos_criados: number
   valores_preenchidos: number
+  itens_corrigidos: number
   arquivos_vinculados: number
   summary: Record<string, number>
 }
