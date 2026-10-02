@@ -115,8 +115,10 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
   valores, upload de pessoal, portas do modo dev), o trabalho de 27–28/09
   (senha mestra de coordenador, redação de valores, barra lateral, Organização)
   e o aviso de nota fiscal acima do saldo. Ver CHANGELOG.
-- **`wip/drive-agent`**: master + modo agente em andamento; **a suíte não importa**
-  até terminar a religação (seção 7).
+- **`wip/drive-agent`**: master (trazida em 2026-10-02) + modo agente do drive
+  **pronto nos testes** (182 passam, inclusive o drive rodando por um agente
+  falso). Falta só o ambiente real — a seção 7 **daquela branch** é a versão
+  atual do plano do modo agente.
 - Nada disso foi testado em produção; não há deploy.
 
 ## 6. Decisões já tomadas (não reabrir sem motivo)
@@ -137,6 +139,11 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
    [`AGENT_CONTRACT.md`](AGENT_CONTRACT.md).
 
 ## 7. Modo agente — divisão de trabalho e o que falta
+
+> **Atualizado em 2026-10-02:** a religação abaixo está FEITA na
+> `wip/drive-agent` (merge eaa2efa). A versão atual desta seção, com o que
+> ainda falta (porta estreita, compose de produção, tela do agente), está no
+> `docs/ESTADO_E_PLANOS.md` daquela branch.
 
 ### Contexto
 O OneDrive está sincronizado num PC; o backend vai rodar em Docker (provavelmente
@@ -222,9 +229,8 @@ agente enrola em um único módulo (dois módulos no mesmo PC = duas instâncias
   cópia versionada em `frontend/vendor/horun-design-system/` (gerada por
   `Horun-Core/scripts/vendor_design_system.py`; `--check` diz se ficou
   desatualizada). Não edite a cópia: mude no Core e rode o script de novo.
-- **`wip/drive-agent`** precisa ser atualizada com o `master`: as rotas do
-  agente passam a ficar sob `/api` automaticamente (laço em `main.py`); o
-  agente tem que usar a URL com `/api`.
+- ~~`wip/drive-agent` precisa ser atualizada com o `master`~~ — feito em
+  2026-10-02 (merge eaa2efa); o drive foi religado ao backend único.
 
 ## 9. Plano (ordem sugerida)
 
