@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import { budgetApi } from '../api/budget'
 import type { BudgetItem, Category, ItemBalance, Revision } from '../types'
 import { BudgetItemsTable } from '../components/budget/BudgetItemsTable'
@@ -9,6 +9,9 @@ import type { ProjectContext } from './ProjectLayout'
 export function BudgetItemsPage() {
   const { project } = useOutletContext<ProjectContext>()
   const isCoordenador = project.my_role === 'coordenador'
+  // ?category=... (vindo do Resumo): só aquela categoria
+  const [params] = useSearchParams()
+  const onlyCategory = params.get('category')
 
   const [balance, setBalance] = useState<ItemBalance[] | null>(null)
   const [categories, setCategories] = useState<Category[] | null>(null)
@@ -141,7 +144,14 @@ export function BudgetItemsPage() {
               Saldo atual (revisão ativa) — os itens do rascunho acima ainda não entraram nesta conta.
             </p>
           )}
-          {categories.map((category) => (
+          {onlyCategory && (
+            <p className="mb-3 text-sm">
+              <Link to={`/projects/${project.id}/budget`} style={{ color: 'var(--color-primary)' }}>
+                ← Ver todas as categorias
+              </Link>
+            </p>
+          )}
+          {categories.filter((c) => !onlyCategory || c.code === onlyCategory).map((category) => (
             <BudgetItemsTable
               key={category.code}
               categoryLabel={category.label}
