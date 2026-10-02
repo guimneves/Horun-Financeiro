@@ -151,14 +151,13 @@ export function BudgetItemsPage() {
               </Link>
             </p>
           )}
-          {categories.filter((c) => !onlyCategory || c.code === onlyCategory).map((category) => (
-            <BudgetItemsTable
-              key={category.code}
-              categoryLabel={category.label}
-              items={balance.filter((i) => i.category === category.code)}
-              projectId={project.id}
-            />
-          ))}
+          <BudgetItemsTable
+            key={onlyCategory ?? 'todas'}
+            categories={categories.filter((c) => !onlyCategory || c.code === onlyCategory)}
+            items={balance}
+            projectId={project.id}
+            initiallyOpen={onlyCategory ? [onlyCategory] : []}
+          />
         </div>
       )}
     </div>
