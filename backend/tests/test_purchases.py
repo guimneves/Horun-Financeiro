@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from tests.conftest import ADMIN, COLAB
@@ -163,6 +164,8 @@ def test_only_coordenador_can_authorize(client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "autorizado"
     assert resp.json()["vendor"] == "Fornecedor X"
+    # a data do realizado fica gravada (gráfico de ritmo da aba Resumo)
+    assert resp.json()["realized_on"] == date.today().isoformat()
 
 
 def test_full_lifecycle_moves_committed_to_executed(client):

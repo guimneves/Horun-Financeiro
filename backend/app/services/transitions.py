@@ -120,7 +120,7 @@ def apply_transition(
     o guard exige, desde que diga o porquê — a justificativa fica no histórico.
     Só vale para o requisito de documento; estado errado ou falta de papel
     continuam sendo recusados."""
-    from datetime import datetime, timezone
+    from datetime import date, datetime, timezone
 
     rule = TRANSITIONS.get(action)
     if rule is None:
@@ -157,6 +157,8 @@ def apply_transition(
         # "comprometido" tem que continuar rastreável até quantity ×
         # estimated_unit_value (editáveis via PATCH antes da autorização),
         # nunca um número solto vindo de uma transição.
+        if process.realized_on is None:
+            process.realized_on = date.today()
     if action == "emitir_nota_fiscal":
         process.final_value = final_value
         if over_balance_warning is not None:

@@ -44,6 +44,26 @@ export interface DashboardAlert {
   amount: string | null
 }
 
+/** Um mês do ritmo de execução: acumulados até o fim do mês, em fração do
+ * orçamento + rendimentos; realizado nulo nos meses futuros. */
+export interface DashboardPacePoint {
+  month: string
+  personnel_share: string | null
+  purchases_share: string | null
+  expected_share: string | null
+  received_share: string | null
+  executed: string | null
+  expected: string | null
+  received: string | null
+}
+
+export interface DashboardPace {
+  points: DashboardPacePoint[]
+  estimated_share: string | null
+  estimated_amount: string | null
+  estimated_processes: number
+}
+
 export interface Dashboard {
   values_visible: boolean
   total: DashboardTotals
@@ -52,6 +72,7 @@ export interface Dashboard {
   installments: DashboardInstallment[]
   time_elapsed_share: string | null
   alerts: DashboardAlert[]
+  pace: DashboardPace
 }
 
 export const dashboardApi = {

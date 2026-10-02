@@ -15,7 +15,7 @@ from app.core.permissions import get_membership
 from app.core.redaction import money
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
-from app.services.dashboard import GROUP_LABELS, Totals, build_dashboard
+from app.services.dashboard import GROUP_LABELS, Totals, _share, build_dashboard
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["dashboard"])
 
@@ -62,6 +62,26 @@ class AlertOut(BaseModel):
     amount: Decimal | None
 
 
+class PacePointOut(BaseModel):
+    month: date
+    # acumulados até o fim do mês, em fração do orçamento + rendimentos
+    # (sempre) e em R$ (só coordenador); realizado nulo nos meses futuros
+    personnel_share: Decimal | None
+    purchases_share: Decimal | None
+    expected_share: Decimal | None  # ritmo linear do prazo
+    received_share: Decimal | None  # parcelas previstas até o mês
+    executed: Decimal | None
+    expected: Decimal | None
+    received: Decimal | None
+
+
+class PaceOut(BaseModel):
+    points: list[PacePointOut]
+    estimated_share: Decimal | None  # parte do realizado com data estimada pelo nº de processo
+    estimated_amount: Decimal | None
+    estimated_processes: int
+
+
 class DashboardOut(BaseModel):
     values_visible: bool  # falso para colaborador: só percentuais
     total: TotalsOut
@@ -70,6 +90,7 @@ class DashboardOut(BaseModel):
     installments: list[InstallmentOut]
     time_elapsed_share: Decimal | None  # fração do prazo do projeto já decorrida
     alerts: list[AlertOut]
+    pace: PaceOut
 
 
 def _totals(t: Totals, visible: bool) -> dict:
@@ -94,6 +115,7 @@ def get_dashboard(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
     visible = membership.role == "coordenador"
     board = build_dashboard(session, project)
+    available = board.total.available
     return DashboardOut(
         values_visible=visible,
         total=TotalsOut(**_totals(board.total, visible)),
@@ -120,4 +142,22 @@ def get_dashboard(
             )
             for a in board.alerts
         ],
+        pace=PaceOut(
+            points=[
+                PacePointOut(
+                    month=p.month,
+                    personnel_share=None if p.personnel is None else _share(p.personnel, available),
+                    purchases_share=None if p.purchases is None else _share(p.purchases, available),
+                    expected_share=None if p.expected is None else _share(p.expected, available),
+                    received_share=_share(p.received, available),
+                    executed=money(p.executed, visible=visible),
+                    expected=money(p.expected, visible=visible),
+                    received=money(p.received, visible=visible),
+                )
+                for p in board.pace.points
+            ],
+            estimated_share=_share(board.pace.estimated_amount, available),
+            estimated_amount=money(board.pace.estimated_amount, visible=visible),
+            estimated_processes=board.pace.estimated_processes,
+        ),
     )

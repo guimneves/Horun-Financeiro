@@ -74,3 +74,62 @@ def test_time_elapsed_share():
     assert _time_elapsed(project, date(2023, 1, 1)) == 0
     assert _time_elapsed(project, date(2030, 1, 1)) == 1
     assert _time_elapsed(Project(code="y", name="y"), date(2024, 7, 2)) is None
+
+
+# --- ritmo de execução -------------------------------------------------------
+
+from datetime import datetime, timezone  # noqa: E402
+
+from app.db.models.personnel import PersonnelAssignment  # noqa: E402
+from app.db.models.purchase import PurchaseProcess  # noqa: E402
+from app.services.pace import build_pace, estimate_date_from_number  # noqa: E402
+
+
+def _process(number, value, status="autorizado", realized_on=None):
+    return PurchaseProcess(
+        project_id=1, budget_position_id=1, process_number=number, title="x", quantity=Decimal("1"),
+        estimated_unit_value=value, estimated_value=value, status=status, realized_on=realized_on,
+        created_by_user_id="u", created_by_username="u", created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+    )
+
+
+def test_process_number_gives_an_approximate_date():
+    assert estimate_date_from_number("2025-1") == date(2025, 1, 1)
+    assert estimate_date_from_number("2025-6900").month in (6, 7)  # meio da numeração do ano
+    assert estimate_date_from_number("2025-99999") == date(2025, 12, 31)  # nunca passa do ano
+    assert estimate_date_from_number("sem número") is None and estimate_date_from_number(None) is None
+
+
+def test_pace_accumulates_month_by_month():
+    project = Project(code="x", name="x", start_date=date(2025, 1, 1), end_date=date(2025, 12, 31))
+    processes = [
+        _process("2025-1", Decimal("1000"), realized_on=date(2025, 2, 10)),  # data exata
+        _process("2025-1", Decimal("500")),  # estimada pelo número: janeiro
+        _process("2025-2", Decimal("9999"), status="cotacao"),  # comprometido: fora do realizado
+    ]
+    person = PersonnelAssignment(
+        project_id=1, person_id=1, budget_position_id=1, role_title="x", monthly_rate=Decimal("100"),
+        start_date=date(2025, 2, 15), end_date=date(2025, 3, 31), status="encerrado", created_by_user_id="u",
+    )
+    pace = build_pace(project, processes, [person], [], Decimal("12000"), date(2025, 4, 20))
+    by_month = {p.month: p for p in pace.points}
+    assert [p.month.month for p in pace.points] == list(range(1, 13))  # toda a vigência
+    assert by_month[date(2025, 1, 1)].executed == Decimal("500")
+    assert by_month[date(2025, 2, 1)].executed == Decimal("1600")  # +1.000 compra +100 pessoal
+    assert by_month[date(2025, 4, 1)].executed == Decimal("1700")  # dois meses de pessoal ao todo
+    assert by_month[date(2025, 5, 1)].executed is None  # futuro
+    assert by_month[date(2025, 12, 1)].expected == Decimal("12000.00")  # ritmo do prazo chega a 100%
+    assert pace.estimated_amount == Decimal("500") and pace.estimated_processes == 1
+
+
+def test_dashboard_has_pace_in_shares(client, drive):  # noqa: F811
+    project = _project_with_budget(client)
+    client.patch(f"/projects/{project['id']}", json={"start_date": "2024-01-01", "end_date": "2027-12-31"}, headers=ADMIN)
+    client.post(f"/projects/{project['id']}/drive/sync", json=LEDGER, headers=ADMIN)
+    pace = _board(client, project["id"], headers=COLAB)["pace"]
+    assert pace["points"] and pace["points"][0]["month"] == "2024-01-01"
+    assert all(p["executed"] is None for p in pace["points"])  # colaborador: sem R$
+    last = [p for p in pace["points"] if p["purchases_share"] is not None][-1]
+    total = _board(client, project["id"])["total"]
+    together = Decimal(last["purchases_share"]) + Decimal(last["personnel_share"])
+    assert abs(together - Decimal(total["executed_share"])) <= Decimal("0.0002")  # só arredondamento

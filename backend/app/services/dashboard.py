@@ -7,6 +7,8 @@ gráficos") — tudo calculado aqui, a partir das mesmas regras de saldo de
 - por categoria: o Quadro Resumo da planilha, com os percentuais de cada
   parte (realizado / comprometido / saldo / estouro) do previsto;
 - parcelas recebidas × usadas;
+- ritmo de execução: realizado acumulado mês a mês × ritmo do prazo
+  (`services/pace.py`);
 - alertas: itens com saldo negativo, itens acima de 90% do previsto,
   compras paradas antes da autorização e processos sem valor lançado.
 
@@ -24,10 +26,12 @@ from sqlmodel import Session, select
 
 from app.db.models.budget import EXPENSE_CATEGORIES
 from app.db.models.funding import FundingInstallment
+from app.db.models.personnel import PersonnelAssignment
 from app.db.models.project import Project
 from app.db.models.purchase import PRE_AUTHORIZATION_STATES, PurchaseProcess
 from app.services.balance import category_summary, item_balances
 from app.services.funding import installments_with_utilization
+from app.services.pace import Pace, build_pace
 
 ZERO = Decimal("0")
 NEAR_LIMIT = Decimal("0.90")  # item "quase no fim": 90% do previsto já usado
@@ -98,6 +102,7 @@ class Dashboard:
     installments: list
     time_elapsed_share: Decimal | None
     alerts: list[Alert] = field(default_factory=list)
+    pace: Pace = field(default_factory=Pace)
 
 
 def _time_elapsed(project: Project, today: date) -> Decimal | None:
@@ -113,9 +118,11 @@ def build_dashboard(session: Session, project: Project, *, today: date | None = 
     groups = {g: Totals() for g in GROUP_LABELS}
     total = Totals()
     alerts: list[Alert] = []
+    position_ids: list[int] = []
 
     if project.active_revision_id is not None:
         balances = item_balances(session, project.active_revision_id)
+        position_ids = [item.position_id for item in balances]
         counts: dict[str, int] = {}
         for item in balances:
             counts[item.category] = counts.get(item.category, 0) + 1
@@ -165,9 +172,18 @@ def build_dashboard(session: Session, project: Project, *, today: date | None = 
                 message=f"Processo {p.process_number or p.title} sem valor lançado (entrou com R$ 0)",
             ))
 
-    installments = installments_with_utilization(
-        list(session.exec(select(FundingInstallment).where(FundingInstallment.project_id == project.id))),
-        total.executed,
+    installment_rows = list(session.exec(select(FundingInstallment).where(FundingInstallment.project_id == project.id)))
+    installments = installments_with_utilization(installment_rows, total.executed)
+    # ritmo: os mesmos processos e pessoas que entram no saldo (revisão ativa)
+    in_budget = set(position_ids)
+    pace = build_pace(
+        project,
+        [p for p in processes if p.budget_position_id in in_budget],
+        [a for a in session.exec(select(PersonnelAssignment).where(PersonnelAssignment.project_id == project.id))
+         if a.budget_position_id in in_budget],
+        installment_rows,
+        total.available,
+        today,
     )
     return Dashboard(
         total=total,
@@ -176,4 +192,5 @@ def build_dashboard(session: Session, project: Project, *, today: date | None = 
         installments=installments,
         time_elapsed_share=_time_elapsed(project, today),
         alerts=alerts,
+        pace=pace,
     )

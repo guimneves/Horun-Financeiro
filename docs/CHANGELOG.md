@@ -9,10 +9,25 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 192 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 195 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Ritmo de execução no Resumo
+
+- Gráfico "Ritmo de execução" (`services/pace.py`): realizado acumulado mês a
+  mês (Equipe Executora e compras, em % do orçamento + rendimentos) × ritmo
+  linear do prazo × parcelas previstas, com a marca de hoje.
+- Equipe Executora entra mês a mês, exata (mesma conta de `accrual.py`).
+- Compras entram na data do realizado: novo campo `realized_on` no processo
+  (gravado ao autorizar pelo módulo, editável via PATCH; `_ensure_column`).
+  As importadas do drive não têm data — as datas dos arquivos são as da cópia
+  para o OneDrive (todas iguais) — e são **estimadas pelo nº de processo
+  COPPETEC** (ano do número; dentro do ano, ~13.800 números/ano, quase
+  linear — medido em processos cujos arquivos têm a data no nome). O painel
+  diz quanto do realizado está com data estimada.
+- O Resumo recarrega ao voltar para a aba do navegador.
 
 ## 02/10/2026 — Novo Resumo, com gráficos
 
