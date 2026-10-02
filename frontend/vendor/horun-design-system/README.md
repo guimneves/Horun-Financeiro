@@ -1,6 +1,6 @@
 # @horun/design-system
 
-Identidade visual compartilhada de todos os módulos do Horun (ver `../Prompt_Horun_Core.md`, seção 2). Não é publicado no npm — é referenciado por caminho relativo (`file:`) a partir do `package.json` de cada módulo, já configurado assim pelo `create_horun_module.py`.
+Identidade visual compartilhada de todos os módulos do Horun (ver `../Prompt_Horun_Core.md`, seção 2). Não é publicado no npm. O frontend do Core usa por caminho relativo (`file:../design-system`, mesmo repositório); **cada módulo leva uma cópia** em `frontend/vendor/horun-design-system/`, gerada por `../scripts/vendor_design_system.py` (o `create_horun_module.py` já faz isso). Motivo: o build Docker de um módulo só enxerga o próprio repositório — um caminho até a pasta do Core funciona na máquina de quem desenvolve e quebra no servidor. **Ao mudar algo aqui, aumente `version` no `package.json`** e rode o script em cada módulo (`--check` mostra quem ficou desatualizado).
 
 ## Conteúdo
 
