@@ -109,11 +109,17 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. 96 testes do backend passam; frontend compila e passa
-  no lint. Tem paridade com a planilha, correção da base e leitura de pastas
-  (modo local). Ver CHANGELOG.
-- **`wip/drive-agent`**: master + modo agente em andamento; **a suíte não importa**
-  até terminar a religação (seção 7).
+- **`master`**: estável. 163 testes do backend passam; frontend compila e passa
+  no lint. Tem paridade com a planilha, correção da base, leitura de pastas
+  (modo local) e as correções da revisão de 01/10 (API sob `/api`, drive,
+  valores, upload de pessoal, portas do modo dev), o trabalho de 27–28/09
+  (senha mestra de coordenador, redação de valores, barra lateral, Organização)
+  e o aviso de nota fiscal acima do saldo. Ver CHANGELOG.
+- **`wip/drive-agent`**: master (até 756f2c7, trazida em 2026-10-02) + modo
+  agente do drive **funcionando nos testes**: 182 testes passam, entre eles os
+  mesmos cenários do drive rodando por um agente falso
+  (`tests/test_drive_agent_mode.py`). Falta só o que depende do ambiente real
+  (seção 7).
 - Nada disso foi testado em produção; não há deploy.
 
 ## 6. Decisões já tomadas (não reabrir sem motivo)
@@ -143,54 +149,46 @@ lado servidor no RE7S) lê por ele. O agente consulta o servidor (nunca o
 contrário), então o PC não abre porta.
 
 ### Lado do agente — FEITO (Agent-Horun 0.4.0, 2026-10-02)
-O servidor do agente agora é o pacote único (`backend/app/agent_server/`, o
-mesmo do RE7S). Diferenças em relação ao pedido original no topo do
+O servidor do agente é o pacote único (`backend/app/agent_server/`, o mesmo do
+RE7S — para atualizar: `python scripts/vendor_server.py "<Financeiro>/backend"`
+no Agent-Horun). Diferenças em relação ao pedido original estão no topo do
 `AGENT_CONTRACT.md` (campos em `args`, versões 0.3/0.4, porta estreita em vez
-de liberar o gateway). Texto original do pedido, para referência:
-`list_tree` (pastas+tamanhos), `read_file` com `offset/length` e `size`, campo
-`code` nos erros, roots somente leitura, **caminhos > 260 no Windows**, cabeçalho
-`X-Horun-Agent-Version: 0.2` (obrigatório) e `Task` tolerante a campos extras.
-Há um prompt pronto no fim do contrato.
+de liberar o gateway do Core).
 
-### Lado do Financeiro (esta sessão) — o que falta na `wip/drive-agent`
-1. **Religar o que importa funções removidas de `core/drive.py`**:
-   - `api/routes_drive.py`: trocar `project_drive_dir`/`safe_join`/`fs_path`
-     por `get_drive_backend()` + `join_rel(project.drive_folder, ...)`. `scan`/`sync`:
-     `backend.list_tree(folder)` → `scan_entries`; planilha:
-     `backend.read_bytes(join_rel(folder, ledger_path))`; `browse`:
-     `list_tree(..., recursive=False)`; `file`: `serve_file`. Mapear `DriveNotFound`
-     → 404 e `DriveError` → 409. `status`: modo agente = `agent_state().online`;
-     adicionar `mode` ao schema.
-   - `api/routes_projects.py`: validar `drive_folder` com `join_rel` (sintaxe) e,
-     só no modo local, checar existência com `LocalDrive.list_tree`.
-   - `core/files.py` e `api/routes_purchases.py`: o download de documento
-     "drive" passa a usar `serve_file(join_rel(project.drive_folder, doc.storage_path), ...)`;
-     tirar `resolve_document_path`.
-2. **`services/drive_scan.py`**: criar `scan_entries(entries, base)` que monta a
-   árvore a partir da lista plana (`DriveEntry`) e reproduz a lógica atual;
-   manter `scan_project_folder(path)` como wrapper sobre `LocalDrive`.
-   Cuidado com a ordem dos arquivos (arquivos da pasta antes das subpastas, sem
-   diferenciar maiúsculas) e com pastas de processo vazias (só vêm como entrada
-   de pasta).
-3. **`services/ledger.py`**: `read_ledger(bytes)` usando `io.BytesIO` (hoje lê de
-   caminho).
-4. **`main.py`**: incluir `routes_agent.router`.
-5. **Frontend**: `DriveStatus` ganha `mode`; mostrar "agente offline" e o
-   estado do agente; opcionalmente tela admin de dispositivos/código de
-   enrolamento.
-6. **Testes**: um **agente falso** em thread (consulta `/agent/tasks` e executa
-   `list_tree`/`read_file` sobre uma pasta temporária) para rodar os mesmos testes
-   de `test_drive.py` em modo agente; casos: agente offline (falha rápida), agente
-   antigo (sem versão → não recebe campos novos nem `list_tree`), tarefa expirada,
-   arquivo acima do limite, leitura em pedaços, token revogado.
-7. **Docker/compose**: variáveis `MODULE_DRIVE_MODE=agent`, root e timeout;
-   **porta estreita do agente** (8002, nginx como o do RE7S — ver
-   `AGENT_CONTRACT.md`, "Rede").
-8. ~~Core liberar `/m/financeiro/agent/*`~~ — não precisa: porta estreita.
-9. ~~Extrair o lado servidor do agente~~ — FEITO: pacote único, já ligado aqui
-   (`routes_agent` no `main.py`, migrações em `AGENT_MIGRATIONS`). Para
-   atualizar: `python scripts/vendor_server.py "<Financeiro>/backend"` no
-   Agent-Horun.
+### Lado do Financeiro — FEITO na `wip/drive-agent` (2026-10-02)
+- Todo acesso ao drive passa por `core/drive_backend.py` (`get_drive_backend()`:
+  `LocalDrive` | `AgentDrive`), com caminhos relativos à raiz do drive
+  (`join_rel(project_folder(...), ...)`): scan/sync, planilha, navegação,
+  download de arquivo e de documento "drive" (`core/files.document_response`).
+- `services/drive_scan.scan_entries(entries)` monta a leitura a partir da lista
+  plana do `list_tree` (mesma ordem e regras de antes; pastas vazias contam);
+  `scan_project_folder(path)` virou atalho para o disco local.
+- `services/ledger.read_ledger` aceita o conteúdo em bytes.
+- `core/drive.py`: as proteções da master (`:` e NUL em qualquer segmento,
+  `commonpath`, pasta do projeto ≠ raiz) valem para os dois modos.
+- Pasta do projeto: no modo agente só a sintaxe é validada ao salvar (não
+  depende do PC estar ligado); no local, também a existência.
+- `GET .../drive/status` ganhou `mode`; no modo agente diz se o agente está
+  conectado e se é novo o bastante, **sem** mandar tarefa ao PC. A tela do drive
+  mostra o aviso e "Verificar de novo".
+- Rotas `/api/agent/*` (pacote) dentro da lista `/api` do `main.py`.
+
+### O que falta (depende do ambiente real)
+1. **Decidir onde o backend roda e em qual PC o OneDrive fica** (seção 8).
+2. **Porta estreita do agente** (proposta 8002): um segundo `server {}` no
+   nginx do frontend, como o do RE7S, repassando só `/agent/enroll`,
+   `/agent/tasks` e `/agent/tasks/{id}/result` para o backend em
+   **`/api/agent/...`** (aqui a API vive sob `/api`); publicar a porta no
+   compose de produção e liberar no firewall. Conferência:
+   `curl http://<servidor>:8002/agent/enroll-codes` → 404.
+3. **Compose de produção**: `MODULE_DRIVE_MODE=agent`, `MODULE_DRIVE_AGENT_ROOT`
+   (padrão `financeiro`), timeout/limites (`core/config.py`).
+4. **Tela de admin do agente** (gerar código, ver/revogar instalações): as rotas
+   existem (`/api/agent/enroll-codes`, `/devices`); o RE7S tem um painel pronto
+   para copiar (`frontend/src/components/AgentPanel.tsx`).
+5. No PC do OneDrive: Agent-Horun 0.4.0, `config.json` com o root `financeiro`
+   em `"mode": "read"` (ou `"read_only": true`) apontando para a pasta que
+   contém as pastas dos projetos.
 
 ### Consequências aceitas do modo agente
 Latência de um intervalo de consulta por ação; sem o PC ligado não se lista nem
@@ -210,16 +208,26 @@ mesmo agente pode atender vários módulos no mesmo PC (`servers` no
   precisam de conferência. Aceitar assim ou definir outra regra?
 - **12 processos com pasta e sem valor na planilha** entram com valor zero.
 - **Linhas inválidas da planilha** (valor não importado) — decidir caso a caso.
-- Nota fiscal acima do estimado e Equipe Executora: **não bloqueiam** — confirmar.
+- Equipe Executora acima do saldo: **não bloqueia** — confirmar. (Nota fiscal acima do
+  saldo: decidido em 01/10 — avisa, pede confirmação e marca o processo.)
 - `MAX_QUOTES_PER_PROCESS = 3` é um **máximo**; se a regra da fundação é um
   **mínimo** de 3 cotações, o modelo está invertido — confirmar.
 - Equipe Executora: importação de pessoal a partir das planilhas/pastas ainda não
   feita.
 - Alembic × `_ensure_column` (decidir com o Core).
+- ~~Build Docker do frontend sem o design-system~~ — resolvido em 2026-10-02:
+  cópia versionada em `frontend/vendor/horun-design-system/` (gerada por
+  `Horun-Core/scripts/vendor_design_system.py`; `--check` diz se ficou
+  desatualizada). Não edite a cópia: mude no Core e rode o script de novo.
+- ~~`wip/drive-agent` precisa ser atualizada com o `master`~~ — feito em
+  2026-10-02. As rotas do agente ficam sob `/api` (laço em `main.py`); a porta
+  estreita repassa `/agent/...` para `/api/agent/...`, então o `url` do agente
+  continua sendo só `http://<servidor>:8002`.
 
 ## 9. Plano (ordem sugerida)
 
-1. Terminar o modo agente (seção 7) em paralelo ao trabalho no repositório do agente.
+1. Modo agente: o código está pronto na `wip/drive-agent`; falta o ambiente
+   (seção 7, "O que falta") e então trazê-la para a `master`.
 2. Cadastrar o orçamento real → rodar "Ler pastas" com a planilha → conferir o
    plano → sincronizar → corrigir estados na tela.
 3. **Fluxos por categoria** (hoje há um fluxo único, o de compra): Afastamento do

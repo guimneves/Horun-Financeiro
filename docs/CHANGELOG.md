@@ -9,8 +9,59 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 96 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 134 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
+
+---
+
+## 01/10/2026 — Trabalho de 27–28/09 integrado + nota fiscal acima do saldo
+
+- **Integrado** o que tinha ficado numa outra cópia local (branch
+  `backup/coordenador-0928`): senha mestra de coordenador, redação de valores
+  em R$ para colaborador, barra lateral com os projetos, página Organização,
+  diretório próprio de usuários, "Ver como" (só dev), nº de processo COPPETEC
+  por item, página própria do item de orçamento, verificação de
+  disponibilidade (sim/não, sem mostrar o saldo).
+- **Coerência entre as duas versões**: a mensagem de saldo insuficiente não
+  cita valores para colaborador; parcelas e visão geral passam a ser só do
+  coordenador; o histórico de eventos chega ao colaborador sem o detalhe.
+- **Senha mestra endurecida** (o repositório é público): sem chave de
+  assinatura padrão — fora do DEV_MODE o módulo não sobe sem
+  `MODULE_SECRET_KEY` (32+ caracteres); sem senha inicial padrão
+  (`MODULE_COORDENADOR_PASSWORD`); 5 erros bloqueiam a pessoa por 15 min.
+- **Nota fiscal acima do saldo**: registrar a nota com valor final que passa
+  do saldo do item devolve um aviso (HTTP 428) em vez de gravar; a tela mostra
+  o aviso e oferece "Corrigir valor" ou "Registrar mesmo assim". Confirmada, o
+  processo guarda quem confirmou e quando (`over_balance_confirmed_by/_at`) e
+  aparece com o sinal "Acima do saldo" na lista de compras, na página do item
+  e no detalhe. Vale para qualquer política de saldo (a nota é um fato).
+- 163 testes do backend.
+
+---
+
+## 01/10/2026 — Correções da revisão de código (em `master`)
+
+Revisão dos repositórios do Horun; os achados mais urgentes deste módulo:
+
+- **Encaixe no Core**: toda a API passou para `/api/...` (`main.py`); o
+  frontend usa um `API_BASE` único com `/api` (`api/client.ts`). Antes, plugado
+  no Core, as chamadas caíam no frontend e voltavam `index.html`. `/health`
+  continua na raiz.
+- **Drive**: `safe_join` recusa `:` em qualquer segmento (no Windows,
+  `pasta/D:/x` trocava de unidade e saía da pasta do projeto) e confere o
+  resultado por `commonpath`; a pasta do projeto não pode ser a raiz do drive
+  (`.`), que daria acesso aos documentos de todos os projetos.
+- **Valores**: `app/core/money.py` — dinheiro `>= 0`, quantidade de compra
+  `> 0`, máximo 2 casas (igual a `Numeric(14,2)`); valor calculado arredondado
+  para centavos. Quantidade negativa liberava saldo bloqueado. `null` explícito
+  em PATCH de campo obrigatório dava 500, agora 422. Erros 422 viram uma frase
+  em português no `detail`.
+- **Upload de pessoal**: limite de tamanho, sha256, evento de auditoria e
+  bloqueio em atribuição encerrada (como o de compras).
+- **Compose de desenvolvimento**: portas em `127.0.0.1` (o modo dev é "admin
+  sem login"); aviso no log quando `HORUN_DEV_MODE` está ligado; healthcheck do
+  frontend em `127.0.0.1`.
+- 38 testes novos (134 no total).
 
 ---
 

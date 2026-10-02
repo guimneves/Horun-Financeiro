@@ -92,6 +92,20 @@ class LocalDrive(DriveBackend):
         return target if os.path.isfile(target) else None
 
 
+AGENT_OFFLINE_MESSAGE = (
+    "O agente do drive está offline — confira se o PC com o OneDrive está ligado, "
+    "com rede e com o Horun Agent rodando."
+)
+
+
+def _agent_error(exc: Exception) -> DriveError:
+    from app.services import agent_bridge
+
+    if isinstance(exc, agent_bridge.AgentOfflineError):
+        return DriveError(AGENT_OFFLINE_MESSAGE)
+    return DriveError(str(exc))
+
+
 class AgentDrive(DriveBackend):
     """Drive alcançado pelo Horun Agent (ver services/agent_bridge.py)."""
 
@@ -108,7 +122,7 @@ class AgentDrive(DriveBackend):
         except agent_bridge.AgentTaskError as exc:
             if agent_bridge.file_not_found(exc):
                 raise DriveNotFound(f"Pasta não encontrada no drive: {path or '(raiz)'}") from exc
-            raise DriveError(str(exc)) from exc
+            raise _agent_error(exc) from exc
         return sorted((DriveEntry(e.path, e.is_dir, e.size) for e in entries), key=lambda e: e.path)
 
     def read_bytes(self, path: str, *, max_bytes: int | None = None) -> bytes:
@@ -119,7 +133,7 @@ class AgentDrive(DriveBackend):
         except agent_bridge.AgentTaskError as exc:
             if agent_bridge.file_not_found(exc):
                 raise DriveNotFound(f"Arquivo não encontrado no drive: {path}") from exc
-            raise DriveError(str(exc)) from exc
+            raise _agent_error(exc) from exc
 
 
 def get_drive_backend() -> DriveBackend:

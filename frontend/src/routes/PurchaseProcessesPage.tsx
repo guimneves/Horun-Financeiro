@@ -6,6 +6,7 @@ import { TERMINAL_STATUSES } from '../types/purchase'
 import { PurchaseStatusBadge } from '../components/purchases/PurchaseStatusBadge'
 import { NewPurchaseProcessModal } from '../components/purchases/NewPurchaseProcessModal'
 import { MoneyValue } from '../components/common/MoneyValue'
+import { OverBalanceAlert } from '../components/purchases/OverBalanceAlert'
 import type { ProjectContext } from './ProjectLayout'
 
 export function PurchaseProcessesPage() {
@@ -70,6 +71,7 @@ export function PurchaseProcessesPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <OverBalanceAlert process={process} />
               <MoneyValue value={process.final_value ?? process.estimated_value} />
               <PurchaseStatusBadge status={process.status} />
             </div>

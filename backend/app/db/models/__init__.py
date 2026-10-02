@@ -10,6 +10,8 @@ from app.db.models.personnel import Person, PersonnelAssignment
 from app.db.models.document import Document
 from app.db.models.audit import AuditEvent
 from app.db.models.funding import FundingInstallment
+from app.db.models.module_settings import ModuleSettings
+from app.db.models.known_user import KnownUser
 from app.db.models.agent import AgentDevice, AgentEnrollCode, AgentTask
 
 __all__ = [
@@ -28,4 +30,6 @@ __all__ = [
     "Document",
     "AuditEvent",
     "FundingInstallment",
+    "ModuleSettings",
+    "KnownUser",
 ]

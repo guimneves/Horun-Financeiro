@@ -11,15 +11,40 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
 import uuid
 from pathlib import Path
 
+from fastapi import HTTPException, Response, UploadFile, status
+from fastapi.responses import FileResponse
+
 from app.core.config import settings
-from app.core.drive import fs_path, project_drive_dir, safe_join
+from app.core.drive import DriveNotFound, fs_path, join_rel, project_folder
+from app.core.drive_backend import serve_file
 from app.db.models.document import Document
 from app.db.models.project import Project
 
 UPLOAD_ROOT = Path(settings.upload_root).resolve()
+
+
+async def read_upload_limited(file: UploadFile) -> tuple[bytes, str]:
+    """Lê o upload em pedaços, recusando acima do limite (sem carregar um
+    arquivo gigante inteiro na memória) e calculando o hash."""
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    digest = hashlib.sha256()
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                f"Arquivo acima do limite de {settings.max_upload_mb} MB.",
+            )
+        digest.update(chunk)
+        chunks.append(chunk)
+    return b"".join(chunks), digest.hexdigest()
 
 
 def save_upload(project_id: int, owner_kind: str, owner_id: int, filename: str, content: bytes) -> tuple[str, int]:
@@ -40,13 +65,18 @@ def resolve_path(storage_path: str) -> Path:
     return UPLOAD_ROOT / storage_path
 
 
-def resolve_document_path(project: Project, doc: Document) -> str:
-    """Caminho no disco do arquivo de um documento, pronto para abrir (já com
-    o prefixo de caminho longo no Windows). Levanta `DriveError` se o drive não
-    estiver acessível (só para documentos do tipo "drive")."""
+def document_response(project: Project, doc: Document) -> Response:
+    """Download de um documento. Os do tipo "drive" vêm do drive do projeto
+    (disco deste servidor ou Horun Agent — `core/drive_backend.py`):
+    `DriveNotFound` se o arquivo sumiu de lá, `DriveError` se o drive não
+    estiver acessível."""
     if doc.storage_kind == "drive":
-        return fs_path(safe_join(project_drive_dir(project), doc.storage_path))
-    return fs_path(resolve_path(doc.storage_path))
+        path = join_rel(project_folder(project.drive_folder), doc.storage_path)
+        return serve_file(path, doc.original_filename, doc.content_type)
+    target = fs_path(resolve_path(doc.storage_path))
+    if not os.path.isfile(target):
+        raise DriveNotFound("Arquivo não encontrado no armazenamento.")
+    return FileResponse(target, media_type=doc.content_type, filename=doc.original_filename)
 
 
 def delete_file(storage_path: str) -> None:

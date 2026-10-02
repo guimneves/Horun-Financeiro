@@ -3,14 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.money import Money, PositiveQuantity, reject_null
 
 
 class PurchaseProcessCreate(BaseModel):
     budget_position_id: int
     title: str
-    quantity: Decimal
-    estimated_unit_value: Decimal
+    quantity: PositiveQuantity
+    estimated_unit_value: Money
     vendor: str | None = None
     previous_attempt_id: int | None = None
     asset_registration_flag: bool = False
@@ -19,10 +21,13 @@ class PurchaseProcessCreate(BaseModel):
 class PurchaseProcessUpdate(BaseModel):
     title: str | None = None
     vendor: str | None = None
-    quantity: Decimal | None = None
-    estimated_unit_value: Decimal | None = None
+    quantity: PositiveQuantity | None = None
+    estimated_unit_value: Money | None = None
     process_number: str | None = None
     asset_registration_flag: bool | None = None
+
+    # vendor/process_number podem ser limpos com null; estes, não.
+    _not_null = field_validator("title", "quantity", "estimated_unit_value", "asset_registration_flag")(reject_null)
 
 
 class PurchaseProcessOut(BaseModel):
@@ -33,8 +38,9 @@ class PurchaseProcessOut(BaseModel):
     title: str
     vendor: str | None
     quantity: Decimal
-    estimated_unit_value: Decimal
-    estimated_value: Decimal
+    # None pra quem não é coordenador — ver core/redaction.py.
+    estimated_unit_value: Decimal | None
+    estimated_value: Decimal | None
     final_value: Decimal | None
     asset_registration_flag: bool
     status: str
@@ -47,9 +53,22 @@ class PurchaseProcessOut(BaseModel):
     updated_at: datetime
     completed_at: datetime | None
     closed_at: datetime | None
+    # Nota fiscal acima do saldo, confirmada depois do aviso (sinal na lista).
+    over_balance_confirmed_by: str | None = None
+    over_balance_confirmed_at: datetime | None = None
     # Avisos que não impedem a operação (ex.: valor acima do saldo num projeto
     # com política "avisar"). Só vem preenchido na resposta de criar/editar.
     warnings: list[str] = []
+
+
+class AvailabilityCheckRequest(BaseModel):
+    budget_position_id: int
+    quantity: PositiveQuantity
+    estimated_unit_value: Money
+
+
+class AvailabilityCheckOut(BaseModel):
+    available: bool
 
 
 class TransitionRequest(BaseModel):
@@ -57,9 +76,12 @@ class TransitionRequest(BaseModel):
     reason: str | None = None
     vendor: str | None = None
     process_number: str | None = None
-    final_value: Decimal | None = None
+    final_value: Money | None = None
     # Só coordenador: avança mesmo sem o documento exigido, justificando.
     override_reason: str | None = None
+    # Nota fiscal acima do saldo do item: a primeira tentativa volta 428 com o
+    # aviso; reenviar com true registra mesmo assim (e marca o processo).
+    confirm_over_balance: bool = False
 
 
 class DocumentTypeUpdate(BaseModel):

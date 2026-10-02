@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.drive import DriveError, resolve_drive_folder
+from app.core.drive import DriveError, DriveNotFound, project_folder
+from app.core.config import settings
+from app.core.drive_backend import get_drive_backend
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador, require_core_admin
 from app.db.models.project import Project, ProjectMembership
@@ -104,7 +106,16 @@ def update_project(
         folder = (changes["drive_folder"] or "").strip()
         if folder:
             try:
-                resolve_drive_folder(folder)
+                folder = project_folder(folder)
+                # Existência só no modo local: no modo agente, conferir aqui
+                # dependeria do PC do OneDrive estar ligado para salvar a
+                # configuração — a tela do drive avisa se a pasta não existir.
+                if settings.drive_mode != "agent":
+                    get_drive_backend().list_tree(folder, recursive=False)
+            except DriveNotFound as exc:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT, f"A pasta do projeto não existe no drive: {folder}"
+                ) from exc
             except DriveError as exc:
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
         changes["drive_folder"] = folder or None

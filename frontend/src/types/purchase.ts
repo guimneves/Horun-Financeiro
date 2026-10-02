@@ -42,8 +42,9 @@ export interface PurchaseProcess {
   title: string
   vendor: string | null
   quantity: string
-  estimated_unit_value: string
-  estimated_value: string
+  // null quando o backend não revela valor pra este usuário (colaborador sem sessão de coordenador).
+  estimated_unit_value: string | null
+  estimated_value: string | null
   final_value: string | null
   asset_registration_flag: boolean
   status: string
@@ -58,6 +59,9 @@ export interface PurchaseProcess {
   updated_at: string
   completed_at: string | null
   closed_at: string | null
+  /** Nota fiscal acima do saldo, confirmada depois do aviso (sinal de alerta na lista) */
+  over_balance_confirmed_by: string | null
+  over_balance_confirmed_at: string | null
 }
 
 export interface PurchaseDocument {

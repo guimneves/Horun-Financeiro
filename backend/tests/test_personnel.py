@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from decimal import Decimal
 
+from app.core.config import settings
 from tests.conftest import ADMIN, COLAB
 
 
@@ -140,3 +143,59 @@ def test_assignment_documents_upload_and_list(client):
     ).json()
     assert len(docs) == 1
     assert docs[0]["period_label"] == "2024-01"
+
+
+def _assignment(client):
+    project, item = _project_with_personnel_position(client)
+    person = client.post(f"/projects/{project['id']}/personnel", json={"full_name": "Renato"}, headers=ADMIN).json()
+    assignment = client.post(
+        f"/projects/{project['id']}/personnel-assignments",
+        json={
+            "person_id": person["id"], "budget_position_id": item["position_id"],
+            "role_title": "Bolsista", "monthly_rate": "1000", "start_date": "2024-01-01",
+        },
+        headers=ADMIN,
+    ).json()
+    return project, assignment
+
+
+def _upload_receipt(client, project, assignment, content=b"conteudo fake"):
+    return client.post(
+        f"/projects/{project['id']}/personnel-assignments/{assignment['id']}/documents",
+        data={"period_label": "2024-01"},
+        files={"file": ("recibo.pdf", content, "application/pdf")},
+        headers=ADMIN,
+    )
+
+
+def test_receipt_upload_is_audited_with_hash(client):
+    project, assignment = _assignment(client)
+    assert _upload_receipt(client, project, assignment).status_code == 201
+    events = client.get(
+        f"/projects/{project['id']}/events",
+        params={"entity_type": "personnel_assignment", "entity_id": assignment["id"]},
+        headers=ADMIN,
+    ).json()
+    assert [e["action"] for e in events] == ["documento_enviado"]
+    # sha256 de b"conteudo fake"
+    assert json.loads(events[0]["detail"])["sha256"] == hashlib.sha256(b"conteudo fake").hexdigest()
+
+
+def test_receipt_upload_over_the_size_limit_is_refused(client, monkeypatch):
+    project, assignment = _assignment(client)
+    monkeypatch.setattr(settings, "max_upload_mb", 0)
+    assert _upload_receipt(client, project, assignment).status_code == 413
+    docs = client.get(
+        f"/projects/{project['id']}/personnel-assignments/{assignment['id']}/documents", headers=ADMIN
+    ).json()
+    assert docs == []
+
+
+def test_closed_assignment_does_not_accept_new_receipts(client):
+    project, assignment = _assignment(client)
+    client.post(
+        f"/projects/{project['id']}/personnel-assignments/{assignment['id']}/close",
+        json={"end_date": "2024-04-01"},
+        headers=ADMIN,
+    )
+    assert _upload_receipt(client, project, assignment).status_code == 409

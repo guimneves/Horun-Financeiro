@@ -48,7 +48,8 @@ def _total_executed(session: Session, project: Project) -> Decimal:
 def list_installments(
     project_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    # valores em R$: só coordenador (core/redaction.py)
+    _membership: ProjectMembership = Depends(require_coordenador),
 ):
     project = session.get(Project, project_id)
     return installments_with_utilization(_installments(session, project_id), _total_executed(session, project))
@@ -97,7 +98,8 @@ def replace_installments(
 def get_overview(
     project_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    # valores em R$: só coordenador (core/redaction.py)
+    _membership: ProjectMembership = Depends(require_coordenador),
 ):
     project = session.get(Project, project_id)
     if project is None:
@@ -138,7 +140,7 @@ def list_events(
     entity_id: int | None = None,
     limit: int = 200,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     query = select(AuditEvent).where(AuditEvent.project_id == project_id)
     if entity_type is not None:
@@ -146,4 +148,9 @@ def list_events(
     if entity_id is not None:
         query = query.where(AuditEvent.entity_id == entity_id)
     query = query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(min(limit, 1000))  # type: ignore[attr-defined]
-    return list(session.exec(query))
+    events = list(session.exec(query))
+    if membership.role == "coordenador":
+        return events
+    # O detalhe do evento traz valores (valor estimado/final, campos
+    # editados) — quem não é coordenador vê só quem fez o quê e quando.
+    return [AuditEventOut.model_validate(e, from_attributes=True).model_copy(update={"detail": "{}"}) for e in events]

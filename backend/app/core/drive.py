@@ -45,18 +45,35 @@ def drive_root() -> Path:
 
 
 def _parts(relative: str) -> list[str]:
-    rel = relative.replace("\\", "/").strip("/")
+    """Segmentos de um caminho relativo, validados.
+
+    O `:` é recusado em QUALQUER segmento, não só no primeiro: no Windows,
+    `base.joinpath("pasta", "D:", "x")` troca de unidade e sai da base
+    (`D:x`). NUL também (corta o caminho em algumas APIs)."""
+    rel = relative.replace("\\", "/")
+    if "\x00" in rel:
+        raise DriveError("Caminho inválido.")
+    rel = rel.strip("/")
     if rel == "":
         return []
-    parts = posixpath.normpath(rel).split("/")
-    if relative.replace("\\", "/").startswith("/") or ":" in parts[0] or any(p in ("..", "") for p in parts):
+    normalized = posixpath.normpath(rel)
+    if normalized == ".":
+        return []
+    parts = normalized.split("/")
+    if any(p in ("..", "") or ":" in p for p in parts):
         raise DriveError("Caminho inválido.")
     return parts
 
 
 def safe_join(base: Path, relative: str) -> Path:
-    """`base / relative`, garantindo que o resultado continua dentro de `base`."""
-    return base.joinpath(*_parts(relative))
+    """`base / relative`, garantindo que o resultado continua dentro de
+    `base` — além da checagem por segmento, uma conferência final por
+    `commonpath` cobre o que ela não previr."""
+    result = base.joinpath(*_parts(relative))
+    base_abs = os.path.abspath(base)
+    if os.path.commonpath([base_abs, os.path.abspath(result)]) != base_abs:
+        raise DriveError("Caminho inválido.")
+    return result
 
 
 def join_rel(base: str, relative: str) -> str:
@@ -64,3 +81,17 @@ def join_rel(base: str, relative: str) -> str:
     nunca sai de `base`. É a forma de montar "pasta do projeto + caminho
     pedido" para qualquer tipo de drive (local ou por agente)."""
     return "/".join(_parts(base) + _parts(relative))
+
+
+def project_folder(drive_folder: str | None) -> str:
+    """Pasta de um projeto, relativa à raiz do drive, validada.
+
+    Tem que ser uma subpasta de verdade: vazio/`.` apontariam o projeto para
+    a raiz do drive inteiro, e os membros desse projeto passariam a navegar
+    nos documentos de todos os outros."""
+    if not drive_folder or not drive_folder.strip():
+        raise DriveError("Este projeto ainda não tem pasta do drive configurada.")
+    folder = join_rel("", drive_folder)
+    if folder == "":
+        raise DriveError("Informe uma subpasta do drive, não a raiz.")
+    return folder

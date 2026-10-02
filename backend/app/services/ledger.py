@@ -12,6 +12,7 @@ Requer `openpyxl` (extra opcional `import`).
 
 from __future__ import annotations
 
+import io
 import os
 import re
 from dataclasses import dataclass
@@ -89,16 +90,24 @@ def _find_columns(header: tuple[object, ...]) -> dict[str, int]:
     return columns
 
 
-def read_ledger(xlsx_path: str) -> LedgerResult:
+def read_ledger(source: str | bytes) -> LedgerResult:
+    """`source`: caminho de um .xlsx no disco deste servidor, ou o conteúdo
+    dele (como chega do Horun Agent, no modo agente)."""
     try:
         import openpyxl
     except ImportError as exc:  # pragma: no cover - depende do ambiente
         raise LedgerError("Instale o extra de importação (pip install -e '.[import]') para ler a planilha.") from exc
 
-    if not os.path.isfile(fs_path(xlsx_path)):
-        raise LedgerError(f"Planilha não encontrada: {xlsx_path}")
-
-    workbook = openpyxl.load_workbook(fs_path(xlsx_path), data_only=True, read_only=True)
+    if isinstance(source, bytes):
+        target = io.BytesIO(source)
+    else:
+        if not os.path.isfile(fs_path(source)):
+            raise LedgerError(f"Planilha não encontrada: {source}")
+        target = fs_path(source)
+    try:
+        workbook = openpyxl.load_workbook(target, data_only=True, read_only=True)
+    except Exception as exc:  # zip corrompido, não é xlsx de verdade...
+        raise LedgerError(f"Não foi possível abrir a planilha: {exc}") from exc
     entries: dict[str, LedgerEntry] = {}
     skipped: list[str] = []
     try:

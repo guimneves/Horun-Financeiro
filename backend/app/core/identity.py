@@ -7,8 +7,12 @@ O Core valida o login e repassa a identidade via cabeçalhos internos
 confiáveis (X-Horun-User-Id/X-Horun-User/X-Horun-Role).
 
 Em desenvolvimento standalone (HORUN_DEV_MODE=true), esses cabeçalhos não
-existem — usa-se um usuário fixo, para permitir desenvolver e testar o
-módulo inteiro sem o Core rodando (Prompt_Horun_Core.md, seção 3).
+existem de verdade — usa-se um usuário fixo, para permitir desenvolver e
+testar o módulo inteiro sem o Core rodando (Prompt_Horun_Core.md, seção 3).
+Mesmo assim, se o frontend mandar esses cabeçalhos por conta própria (o
+seletor "Ver como", dev-only), eles são respeitados — só pra permitir
+alternar entre papéis (coordenador/colaborador) localmente sem precisar do
+Core. Nunca acontece em produção, onde DEV_MODE é sempre false.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ def get_identity(
     x_horun_role: str | None = Header(default=None),
 ) -> HorunIdentity:
     if DEV_MODE:
+        if x_horun_user_id and x_horun_user:
+            return HorunIdentity(user_id=x_horun_user_id, username=x_horun_user, role=x_horun_role or "admin")
         return HorunIdentity(user_id="dev", username="dev", role="admin")
 
     if not x_horun_user_id or not x_horun_user or not x_horun_role:

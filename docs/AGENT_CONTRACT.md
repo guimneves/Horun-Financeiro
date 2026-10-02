@@ -20,7 +20,8 @@
 > ## Rede — como o agente chega ao Financeiro
 > Como no RE7S (`frontend/nginx.conf`, segundo `server { listen 8001; }`): uma
 > porta própria que só repassa `/agent/enroll`, `/agent/tasks` e
-> `/agent/tasks/{id}/result` ao backend e responde 404 ao resto
+> `/agent/tasks/{id}/result` ao backend — em `/api/agent/...`, porque aqui a
+> API inteira vive sob `/api` — e responde 404 ao resto
 > (`client_max_body_size 50m`). Proposta: **8002**, publicada no compose e com
 > regra no Firewall do Windows do servidor. No `config.json` do agente:
 > `"url": "http://192.168.31.80:8002"`. Conferência: `curl

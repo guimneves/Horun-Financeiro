@@ -36,6 +36,9 @@ export interface SyncResult {
 
 export interface DriveStatus {
   configured: boolean
+  /** "local": o drive está no disco do servidor; "agent": lido pelo Horun
+   * Agent no PC onde o OneDrive está sincronizado (cada ação espera o PC). */
+  mode: 'local' | 'agent'
   project_folder: string | null
   available: boolean
   message: string | null

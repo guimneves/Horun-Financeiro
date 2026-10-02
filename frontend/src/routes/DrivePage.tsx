@@ -35,11 +35,23 @@ export function DrivePage() {
   const { project } = useOutletContext<ProjectContext>()
   const isCoordenador = project.my_role === 'coordenador'
   const [status, setStatus] = useState<DriveStatus | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
 
-  useEffect(() => {
-    driveApi.status(project.id).then(setStatus).catch(() => setStatus(null))
-  }, [project.id, project.drive_folder])
+  function loadStatus() {
+    setChecking(true)
+    setStatusError(null)
+    driveApi
+      .status(project.id)
+      .then(setStatus)
+      .catch((err) => setStatusError(err instanceof Error ? err.message : 'Erro ao consultar o drive.'))
+      .finally(() => setChecking(false))
+  }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadStatus, [project.id, project.drive_folder])
+
+  if (statusError) return <p className="p-6" style={{ color: 'var(--color-danger, #d43b3b)' }}>{statusError}</p>
   if (status === null) return <p className="p-6">Carregando…</p>
 
   if (!status.available) {
@@ -50,12 +62,23 @@ export function DrivePage() {
         </h2>
         <p style={{ color: 'var(--color-text-muted)' }}>
           {status.message ?? 'O drive não está disponível.'}{' '}
-          {isCoordenador && status.configured && (
+          {isCoordenador && status.configured && (status.mode !== 'agent' || !status.project_folder) && (
             <Link to={`/projects/${project.id}/settings`} style={{ color: 'var(--color-primary)' }}>
               Configurar a pasta do projeto
             </Link>
           )}
         </p>
+        {status.mode === 'agent' && status.project_folder && (
+          <button
+            type="button"
+            onClick={loadStatus}
+            disabled={checking}
+            className="mt-3 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {checking ? 'Verificando…' : 'Verificar de novo'}
+          </button>
+        )}
       </div>
     )
   }
@@ -67,6 +90,13 @@ export function DrivePage() {
       </h2>
       <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
         Pasta: {status.project_folder}. O programa só lê o drive — nunca grava, move ou apaga arquivos nele.
+        {status.mode === 'agent' && (
+          <>
+            {' '}
+            Lido pelo Horun Agent no PC onde o OneDrive está sincronizado — cada ação espera esse PC responder
+            (alguns segundos).
+          </>
+        )}
       </p>
       {isCoordenador && <SyncPanel projectId={project.id} />}
       <Browser projectId={project.id} />

@@ -45,6 +45,7 @@ class ItemBalance:
     # em processos (comprometidos ou realizados). Nulo para Equipe Executora,
     # que não se mede em unidades.
     available_quantity: Decimal | None = None
+    coppetec_process_number: str | None = None
 
 
 def _used_quantity(processes: list[PurchaseProcess]) -> Decimal:
@@ -155,19 +156,22 @@ def item_balances(
                 executed=executed,
                 balance=balance,
                 available_quantity=available_quantity,
+                coppetec_process_number=item.coppetec_process_number,
             )
         )
     results.sort(key=lambda r: (r.category, r.item_number))
     return results
 
 
-def _brl(value: Decimal) -> str:
+def brl(value: Decimal) -> str:
     # 1234.5 -> "R$ 1.234,50" (formato brasileiro, sem depender de locale)
     text = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {text}"
 
 
-def check_balance(session: Session, project: Project, position_id: int, additional: Decimal) -> str | None:
+def check_balance(
+    session: Session, project: Project, position_id: int, additional: Decimal, *, show_values: bool = True
+) -> str | None:
     """Devolve a mensagem de "saldo insuficiente" se `additional` não cabe no
     saldo do item, ou None se cabe. `additional` é o quanto o valor contado do
     item AUMENTA com a operação (processo novo = o valor inteiro; edição = só
@@ -186,12 +190,29 @@ def check_balance(session: Session, project: Project, position_id: int, addition
     if additional <= row.balance:
         return None
     label = EXPENSE_CATEGORIES[row.category]["label"]
+    if not show_values:
+        # Quem não é coordenador nunca vê valores (core/redaction.py) — nem
+        # dentro da mensagem de erro.
+        return f"Saldo insuficiente no item Nº {row.item_number} ({label}). Fale com o coordenador do projeto."
     available = max(row.balance, Decimal("0"))
     return (
         f"Saldo insuficiente no item Nº {row.item_number} ({label}): "
-        f"disponível {_brl(available)}, valor solicitado {_brl(additional)} "
-        f"(faltam {_brl(additional - available)})."
+        f"disponível {brl(available)}, valor solicitado {brl(additional)} "
+        f"(faltam {brl(additional - available)})."
     )
+
+
+def position_balance(session: Session, project_id: int, position_id: int) -> ItemBalance | None:
+    """Saldo de UMA posição na revisão ativa do projeto — usado pelo
+    "verificar disponibilidade" (routes_purchases.py), que precisa do
+    saldo real sem devolvê-lo pra quem não é coordenador."""
+    from app.db.models.project import Project
+
+    project = session.get(Project, project_id)
+    if project is None or project.active_revision_id is None:
+        return None
+    rows = item_balances(session, project.active_revision_id)
+    return next((r for r in rows if r.position_id == position_id), None)
 
 
 @dataclass

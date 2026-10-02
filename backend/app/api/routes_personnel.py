@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
-from app.core.files import delete_file, resolve_path, save_upload
+from app.core.files import delete_file, read_upload_limited, resolve_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
+from app.core.redaction import money
 from app.db.models.budget import EXPENSE_CATEGORIES, BudgetPosition
 from app.db.models.document import Document
 from app.db.models.personnel import Person, PersonnelAssignment
@@ -28,6 +29,7 @@ from app.schemas.personnel import (
     PersonOut,
 )
 from app.services.accrual import compute_accrual
+from app.services.audit import record_event
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["personnel"])
 
@@ -55,7 +57,9 @@ def create_person(
     return person
 
 
-def _assignment_out(session: Session, assignment: PersonnelAssignment, person: Person) -> AssignmentOut:
+def _assignment_out(
+    session: Session, assignment: PersonnelAssignment, person: Person, *, visible: bool
+) -> AssignmentOut:
     accrual = compute_accrual(
         start_date=assignment.start_date,
         end_date=assignment.end_date,
@@ -70,13 +74,13 @@ def _assignment_out(session: Session, assignment: PersonnelAssignment, person: P
         person_name=person.full_name,
         budget_position_id=assignment.budget_position_id,
         role_title=assignment.role_title,
-        monthly_rate=assignment.monthly_rate,
+        monthly_rate=money(assignment.monthly_rate, visible=visible),
         start_date=assignment.start_date,
         end_date=assignment.end_date,
         status=assignment.status,
         accrued_months=accrual.accrued_months,
-        accrued_value=accrual.accrued_value,
-        committed_future_value=accrual.committed_future_value,
+        accrued_value=money(accrual.accrued_value, visible=visible),
+        committed_future_value=money(accrual.committed_future_value, visible=visible),
     )
 
 
@@ -91,13 +95,14 @@ def _get_assignment(session: Session, project_id: int, assignment_id: int) -> Pe
 def list_assignments(
     project_id: int,
     session: Session = Depends(get_session),
-    _membership: ProjectMembership = Depends(get_membership),
+    membership: ProjectMembership = Depends(get_membership),
 ):
     assignments = session.exec(
         select(PersonnelAssignment).where(PersonnelAssignment.project_id == project_id)
     ).all()
     people = {p.id: p for p in session.exec(select(Person).where(Person.project_id == project_id))}
-    return [_assignment_out(session, a, people[a.person_id]) for a in assignments]
+    visible = membership.role == "coordenador"
+    return [_assignment_out(session, a, people[a.person_id], visible=visible) for a in assignments]
 
 
 @router.post("/personnel-assignments", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED)
@@ -133,7 +138,7 @@ def create_assignment(
     session.add(assignment)
     session.commit()
     session.refresh(assignment)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 @router.patch("/personnel-assignments/{assignment_id}", response_model=AssignmentOut)
@@ -156,7 +161,7 @@ def update_assignment(
     session.commit()
     session.refresh(assignment)
     person = session.get(Person, assignment.person_id)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 @router.post("/personnel-assignments/{assignment_id}/close", response_model=AssignmentOut)
@@ -184,7 +189,7 @@ def close_assignment(
     session.commit()
     session.refresh(assignment)
     person = session.get(Person, assignment.person_id)
-    return _assignment_out(session, assignment, person)
+    return _assignment_out(session, assignment, person, visible=True)  # rota já é coordenador-only
 
 
 def _doc_out(doc: Document) -> DocumentOut:
@@ -230,14 +235,21 @@ async def upload_assignment_document(
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
-    _get_assignment(session, project_id, assignment_id)
-    content = await file.read()
+    assignment = _get_assignment(session, project_id, assignment_id)
+    # Mesma disciplina do upload de compras: atribuição encerrada fica
+    # congelada (o delete já recusava), tamanho limitado sem carregar tudo na
+    # memória, hash e evento de auditoria — é recibo de pagamento de pessoa.
+    if assignment.status == "encerrado":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Atribuição encerrada não aceita novos documentos.")
+    content, sha256 = await read_upload_limited(file)
     storage_path, size = save_upload(project_id, "personnel", assignment_id, file.filename or "arquivo", content)
     document = Document(
         personnel_assignment_id=assignment_id,
         doc_type="recibo_pessoal",
         original_filename=file.filename or "arquivo",
         storage_path=storage_path,
+        storage_kind="upload",
+        sha256=sha256,
         content_type=file.content_type or "application/octet-stream",
         size_bytes=size,
         period_label=period_label,
@@ -246,6 +258,16 @@ async def upload_assignment_document(
         uploaded_by_username=identity.username,
     )
     session.add(document)
+    session.flush()
+    record_event(
+        session,
+        project_id=project_id,
+        entity_type="personnel_assignment",
+        entity_id=assignment_id,
+        action="documento_enviado",
+        actor=identity,
+        detail={"documento_id": document.id, "arquivo": document.original_filename, "sha256": sha256},
+    )
     session.commit()
     session.refresh(document)
     return _doc_out(document)

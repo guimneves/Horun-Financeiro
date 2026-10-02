@@ -28,6 +28,8 @@ from app.db.models import personnel as _personnel_models  # noqa: F401
 from app.db.models import document as _document_models  # noqa: F401
 from app.db.models import audit as _audit_models  # noqa: F401
 from app.db.models import funding as _funding_models  # noqa: F401
+from app.db.models import module_settings as _module_settings_models  # noqa: F401
+from app.db.models import known_user as _known_user_models  # noqa: F401
 from app.db.models import agent as _agent_models  # noqa: F401
 from app.agent_server.models import MIGRATIONS as AGENT_MIGRATIONS
 
@@ -43,7 +45,11 @@ engine = create_engine(
 def _ensure_column(table: str, column: str, ddl_type: str) -> None:
     from sqlalchemy import inspect
 
-    existing = {c["name"] for c in inspect(engine).get_columns(table)}
+    inspector = inspect(engine)
+    if not inspector.has_table(table):
+        # tabela nova: o create_all já a cria com todas as colunas
+        return
+    existing = {c["name"] for c in inspector.get_columns(table)}
     if column in existing:
         return
     with engine.begin() as conn:
@@ -71,14 +77,44 @@ def _run_migrations() -> None:
     _ensure_column("purchaseprocess", "origin", "VARCHAR DEFAULT 'manual'")
     _ensure_column("purchaseprocess", "drive_rel_path", "VARCHAR")
     _ensure_unique_index("uq_process_project_number", "purchaseprocess", "project_id, process_number")
+    _ensure_column("budgetitem", "coppetec_process_number", "VARCHAR")
+    _ensure_column("purchaseprocess", "over_balance_confirmed_by", "VARCHAR")
+    _ensure_column("purchaseprocess", "over_balance_confirmed_at", "TIMESTAMP")
     # colunas novas das tabelas do agente (pacote único — ver app/agent_server)
     for table, column, ddl_type in AGENT_MIGRATIONS:
         _ensure_column(table, column, ddl_type)
 
 
+def _ensure_module_settings() -> None:
+    from app.core.security import hash_password
+    from app.db.models.module_settings import ModuleSettings
+
+    from app.core.identity import DEV_MODE
+
+    password = settings.default_coordenador_password or (DEV_PLACEHOLDER_PASSWORD if DEV_MODE else "")
+    with Session(engine) as session:
+        if session.get(ModuleSettings, 1) is None:
+            if not password:
+                # Sem senha inicial definida: o registro é criado na próxima
+                # subida com MODULE_COORDENADOR_PASSWORD; até lá, o login de
+                # coordenador responde "não configurado".
+                logger.warning(
+                    "MODULE_COORDENADOR_PASSWORD não definida: login de coordenador indisponível."
+                )
+                return
+            session.add(ModuleSettings(id=1, coordenador_password_hash=hash_password(password)))
+            session.commit()
+
+
+# Só em DEV_MODE (standalone, sem login): senha de coordenador conhecida, pra
+# poder testar a tela local. Nunca usada em produção.
+DEV_PLACEHOLDER_PASSWORD = "troque-esta-senha"
+
+
 def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
     _run_migrations()
+    _ensure_module_settings()
 
 
 def get_session() -> Generator[Session, None, None]:

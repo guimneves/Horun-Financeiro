@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import settings
+from app.core.drive import DriveError, safe_join
 from app.core.process_number import normalize_process_number
 from app.services.drive_scan import classify_document, scan_project_folder
 from tests.conftest import ADMIN, COLAB
@@ -273,12 +274,46 @@ def test_browse_and_download_any_file_in_project_folder(client, drive):
     assert file_resp.status_code == 200 and file_resp.content == b"pdf-bytes"
 
 
-@pytest.mark.parametrize("evil", ["../fora.txt", "..", "a/../../fora", "/etc/passwd", "C:/Windows/win.ini"])
+@pytest.mark.parametrize(
+    "evil",
+    [
+        "../fora.txt",
+        "..",
+        "a/../../fora",
+        "/etc/passwd",
+        "C:/Windows/win.ini",
+        # letra de unidade no meio do caminho: no Windows, joinpath troca de
+        # unidade a partir desse segmento e sai da pasta do projeto
+        "pasta/D:/segredo.txt",
+        "Material de consumo - Nacional/C:/Windows/win.ini",
+        r"a\..\..\fora.txt",
+    ],
+)
 def test_cannot_escape_project_folder(client, drive, evil):
     project = _project_with_budget(client)
     (drive.parent / "fora.txt").write_text("segredo")
     assert client.get(f"/projects/{project['id']}/drive/file", params={"path": evil}, headers=ADMIN).status_code in (404, 409)
     assert client.get(f"/projects/{project['id']}/drive/browse", params={"path": evil}, headers=ADMIN).status_code in (404, 409)
+
+
+@pytest.mark.parametrize("relative", ["pasta/D:/x", "D:", "a/C:x", "a/b\x00c"])
+def test_safe_join_rejects_drive_letters_and_nul_anywhere(tmp_path, relative):
+    with pytest.raises(DriveError):
+        safe_join(tmp_path, relative)
+
+
+def test_safe_join_keeps_valid_paths_inside_base(tmp_path):
+    assert safe_join(tmp_path, "a/./b//c/") == tmp_path / "a" / "b" / "c"
+    assert safe_join(tmp_path, "") == tmp_path
+
+
+@pytest.mark.parametrize("root_like", [".", "./", "a/..", "/"])
+def test_drive_folder_cannot_be_the_drive_root(client, drive, root_like):
+    # Apontar o projeto pra raiz do drive daria a todos os membros dele
+    # acesso aos documentos de todos os outros projetos.
+    project = _project_with_budget(client, drive_folder=None)
+    resp = client.patch(f"/projects/{project['id']}", json={"drive_folder": root_like}, headers=ADMIN)
+    assert resp.status_code == 422
 
 
 def test_drive_folder_must_exist_and_ledger_must_be_xlsx(client, drive):

@@ -13,6 +13,12 @@ Estrutura esperada (a que o laboratório já usa):
 O que não segue esse padrão (viagens, reformulações, diárias por pessoa...) não
 é forçado a virar processo: vai para `unrecognized`, com o motivo, para a
 pessoa decidir.
+
+A leitura trabalha sobre uma LISTA de entradas (pastas e arquivos com tamanho,
+caminhos relativos à pasta do projeto) — a mesma que o `list_tree` do drive
+devolve, venha ela do disco deste servidor ou do Horun Agent (ver
+`core/drive_backend.py`). `scan_project_folder` é o atalho para uma pasta
+local.
 """
 
 from __future__ import annotations
@@ -20,7 +26,9 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from app.core.drive import fs_path
 from app.core.process_number import normalize_process_number
@@ -115,13 +123,39 @@ class ScanResult:
     duplicate_numbers: list[str] = field(default_factory=list)
 
 
-def _entries(path: str) -> list[os.DirEntry[str]]:
-    with os.scandir(fs_path(path)) as it:
-        return sorted(it, key=lambda e: e.name.casefold())
+class Entry(Protocol):
+    path: str  # relativo à pasta do projeto, posix
+    is_dir: bool
+    size: int | None
 
 
-def _relative(project_dir: str, path: str) -> str:
-    return os.path.relpath(path, project_dir).replace("\\", "/")
+@dataclass
+class _Node:
+    name: str
+    is_dir: bool
+    size: int
+    children: dict[str, _Node] = field(default_factory=dict)
+
+    def sorted_children(self) -> list[_Node]:
+        return sorted(self.children.values(), key=lambda n: n.name.casefold())
+
+
+def _build_tree(entries: Iterable[Entry]) -> _Node:
+    root = _Node(name="", is_dir=True, size=0)
+    for entry in entries:
+        parts = [p for p in entry.path.split("/") if p]
+        node = root
+        for i, part in enumerate(parts):
+            last = i == len(parts) - 1
+            child = node.children.get(part)
+            if child is None:
+                child = _Node(name=part, is_dir=True if not last else entry.is_dir, size=0)
+                node.children[part] = child
+            if last:
+                child.is_dir = entry.is_dir
+                child.size = entry.size or 0
+            node = child
+    return root
 
 
 def _infer_status(cancelled: bool, files: list[ScannedFile]) -> str:
@@ -140,73 +174,106 @@ def _infer_status(cancelled: bool, files: list[ScannedFile]) -> str:
     return "cotacao"
 
 
-def _scan_process_folder(project_dir: str, process_path: str) -> list[ScannedFile]:
+def _scan_process_folder(node: _Node, rel: str) -> list[ScannedFile]:
+    """Arquivos da pasta do processo e das subpastas, na mesma ordem de um
+    `os.walk` com nomes em ordem alfabética (arquivos da pasta antes das
+    subpastas, sem diferenciar maiúsculas)."""
     files: list[ScannedFile] = []
-    for current, dirs, names in os.walk(fs_path(process_path)):
-        dirs.sort(key=str.casefold)
-        # os.walk devolve o caminho já com o prefixo de caminho longo; tira
-        # para montar o caminho relativo certo.
-        plain = current[4:] if current.startswith("\\\\?\\") else current
-        for name in sorted(names, key=str.casefold):
-            if name.startswith("~$") or name.startswith(".") or name.casefold() in _IGNORED_FILES:
-                continue
-            full = os.path.join(plain, name)
-            files.append(
-                ScannedFile(
-                    rel_path=_relative(project_dir, full),
-                    name=name,
-                    size_bytes=os.stat(fs_path(full)).st_size,
-                    doc_type=classify_document(name),
-                )
+    children = node.sorted_children()
+    for child in children:
+        if child.is_dir:
+            continue
+        name = child.name
+        if name.startswith("~$") or name.startswith(".") or name.casefold() in _IGNORED_FILES:
+            continue
+        files.append(
+            ScannedFile(
+                rel_path=f"{rel}/{name}",
+                name=name,
+                size_bytes=child.size,
+                doc_type=classify_document(name),
             )
+        )
+    for child in children:
+        if child.is_dir:
+            files.extend(_scan_process_folder(child, f"{rel}/{child.name}"))
     return files
 
 
 def scan_project_folder(project_dir: str) -> ScanResult:
+    """Atalho para uma pasta do disco deste servidor (modo local)."""
     project_dir = os.path.abspath(project_dir)
+    entries: list[_LocalEntry] = []
+    for current, dirs, names in os.walk(fs_path(project_dir)):
+        # os.walk devolve o caminho já com o prefixo de caminho longo; tira
+        # para montar o caminho relativo certo.
+        plain = current[4:] if current.startswith("\\\\?\\") else current
+        for name in dirs:
+            entries.append(_LocalEntry(_relative(project_dir, os.path.join(plain, name)), True, None))
+        for name in names:
+            full = os.path.join(plain, name)
+            entries.append(_LocalEntry(_relative(project_dir, full), False, os.stat(fs_path(full)).st_size))
+    return scan_entries(entries)
+
+
+@dataclass
+class _LocalEntry:
+    path: str
+    is_dir: bool
+    size: int | None
+
+
+def _relative(project_dir: str, path: str) -> str:
+    return os.path.relpath(path, project_dir).replace("\\", "/")
+
+
+def scan_entries(entries: Iterable[Entry]) -> ScanResult:
+    """Lê a estrutura a partir das entradas da pasta do projeto (caminhos
+    relativos a ela). Pastas vazias precisam vir como entrada própria — é o
+    caso de um processo "(CANCELADO)" sem arquivo nenhum."""
+    tree = _build_tree(entries)
     result = ScanResult()
     seen_numbers: set[str] = set()
 
-    for category_entry in _entries(project_dir):
-        if not category_entry.is_dir():
+    for category_node in tree.sorted_children():
+        if not category_node.is_dir:
             continue
-        category_path = os.path.join(project_dir, category_entry.name)
-        folded = fold(category_entry.name)
+        folded = fold(category_node.name)
         if folded in PERSONNEL_FOLDERS:
             result.ignored_folders.append(
-                {"path": category_entry.name, "reason": "Equipe Executora não usa o fluxo de compra."}
+                {"path": category_node.name, "reason": "Equipe Executora não usa o fluxo de compra."}
             )
             continue
         category = CATEGORY_FOLDERS.get(folded)
         if category is None:
             result.ignored_folders.append(
-                {"path": category_entry.name, "reason": "Pasta que não é uma categoria de despesa."}
+                {"path": category_node.name, "reason": "Pasta que não é uma categoria de despesa."}
             )
             continue
 
-        for item_entry in _entries(category_path):
-            item_path = os.path.join(category_path, item_entry.name)
-            if not item_entry.is_dir():
+        for item_node in category_node.sorted_children():
+            item_rel = f"{category_node.name}/{item_node.name}"
+            if not item_node.is_dir:
                 result.loose_files += 1
                 continue
-            item_match = _ITEM_RE.match(item_entry.name)
+            item_match = _ITEM_RE.match(item_node.name)
             if item_match is None:
                 result.unrecognized.append(
-                    {"path": _relative(project_dir, item_path), "reason": "Pasta de item fora do padrão 'Item N - descrição'."}
+                    {"path": item_rel, "reason": "Pasta de item fora do padrão 'Item N - descrição'."}
                 )
                 continue
             item_number = int(item_match.group(1))
 
-            for process_entry in _entries(item_path):
-                process_path = os.path.join(item_path, process_entry.name)
-                if not process_entry.is_dir():
+            for process_node in item_node.sorted_children():
+                process_rel = f"{item_rel}/{process_node.name}"
+                if not process_node.is_dir:
                     result.loose_files += 1
                     continue
-                process_match = _PROCESS_RE.match(process_entry.name)
+                process_match = _PROCESS_RE.match(process_node.name)
                 if process_match is None:
                     result.unrecognized.append(
                         {
-                            "path": _relative(project_dir, process_path),
+                            "path": process_rel,
                             "reason": "Pasta sem nº de processo COPPETEC no nome (esperado AAAA-NNNN).",
                         }
                     )
@@ -220,13 +287,13 @@ def scan_project_folder(project_dir: str) -> ScanResult:
                     result.duplicate_numbers.append(number)
                 seen_numbers.add(number)
 
-                files = _scan_process_folder(project_dir, process_path)
+                files = _scan_process_folder(process_node, process_rel)
                 result.processes.append(
                     ScannedProcess(
                         category=category,
                         item_number=item_number,
-                        item_folder=_relative(project_dir, item_path),
-                        folder=_relative(project_dir, process_path),
+                        item_folder=item_rel,
+                        folder=process_rel,
                         process_number=number,
                         title=title or item_match.group(2).strip() or "(sem título)",
                         cancelled=cancelled,

@@ -47,7 +47,8 @@ class SyncResultOut(BaseModel):
 
 
 class DriveStatusOut(BaseModel):
-    configured: bool  # MODULE_DRIVE_ROOT definido neste servidor
+    configured: bool  # MODULE_DRIVE_ROOT definido neste servidor (ou modo agente)
+    mode: str = "local"  # "local" (disco deste servidor) | "agent" (Horun Agent)
     project_folder: str | None
     available: bool  # a pasta do projeto existe e está acessível agora
     message: str | None = None

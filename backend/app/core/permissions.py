@@ -12,10 +12,11 @@ dentro).
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core.identity import HorunIdentity, get_identity
+from app.core.security import verify_coordenador_token
 from app.db.models.project import ProjectMembership
 from app.db.session import get_session
 
@@ -24,6 +25,7 @@ def get_membership(
     project_id: int,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
+    x_horun_coordenador_token: str | None = Header(default=None),
 ) -> ProjectMembership:
     membership = session.exec(
         select(ProjectMembership).where(
@@ -33,6 +35,11 @@ def get_membership(
     ).first()
     if membership is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Sem acesso a este projeto.")
+    if membership.role != "coordenador" and verify_coordenador_token(x_horun_coordenador_token):
+        # Sessão elevada pela senha mestra do módulo (ver routes_auth.py) —
+        # atua como coordenador aqui sem alterar o cadastro real de
+        # membros; é um objeto solto, nunca commitado no banco.
+        membership = membership.model_copy(update={"role": "coordenador"})
     return membership
 
 

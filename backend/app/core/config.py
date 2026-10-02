@@ -13,7 +13,12 @@ class Settings:
     database_url: str = os.environ.get(
         "MODULE_DATABASE_URL", "sqlite:///./financeiro_dev.db"
     )
-    secret_key: str = os.environ.get("MODULE_SECRET_KEY", "dev-only-troque-em-producao")
+    # Assina o token da sessão de coordenador (core/security.py). O
+    # repositório é público: um valor padrão aqui seria uma chave conhecida
+    # por todos, e qualquer um forjaria um token de coordenador. Por isso não
+    # há padrão — fora do DEV_MODE o módulo não sobe sem ela (ver
+    # check_production_settings).
+    secret_key: str = os.environ.get("MODULE_SECRET_KEY", "")
     # Diretório dos documentos anexados (cotações, notas fiscais, etc.) —
     # vira volume Docker nomeado em produção, mesma disciplina do Postgres.
     upload_root: str = os.environ.get("MODULE_UPLOAD_ROOT", "./uploads")
@@ -25,6 +30,13 @@ class Settings:
     # (`Project.drive_folder`) — assim o mesmo cadastro vale no PC de casa,
     # neste PC e no servidor, cada um com a sua raiz. Vazio = recurso desligado.
     drive_root: str | None = os.environ.get("MODULE_DRIVE_ROOT") or None
+    # Senha de coordenador inicial — só usada pra criar o registro de
+    # configuração na primeira vez que o módulo sobe (bootstrap). Depois
+    # disso, os coordenadores trocam pela própria interface e este valor
+    # de env deixa de ter qualquer efeito. Sem ela (fora do DEV_MODE),
+    # nenhuma senha é criada e o login de coordenador fica indisponível —
+    # nunca um padrão público.
+    default_coordenador_password: str = os.environ.get("MODULE_COORDENADOR_PASSWORD", "")
     # Como o backend alcança o drive: "local" lê a pasta direto do disco
     # (MODULE_DRIVE_ROOT); "agent" pede ao Horun Agent, instalado no PC onde o
     # OneDrive está sincronizado, que leia por ele (ver docs/AGENT_CONTRACT.md).
@@ -42,3 +54,17 @@ class Settings:
 
 
 settings = Settings()
+
+MIN_SECRET_KEY_LENGTH = 32
+
+
+def check_production_settings(dev_mode: bool) -> None:
+    """Chamado na subida do módulo. Em produção, recusa iniciar com uma
+    chave de assinatura ausente ou curta demais."""
+    if dev_mode:
+        return
+    if len(settings.secret_key) < MIN_SECRET_KEY_LENGTH:
+        raise RuntimeError(
+            f"MODULE_SECRET_KEY ausente ou curta (mínimo {MIN_SECRET_KEY_LENGTH} caracteres). "
+            'Gere uma com: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )

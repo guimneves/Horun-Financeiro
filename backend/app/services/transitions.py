@@ -114,6 +114,7 @@ def apply_transition(
     final_value: Decimal | None = None,
     actor: HorunIdentity | None = None,
     override_reason: str | None = None,
+    over_balance_warning: str | None = None,
 ) -> PurchaseProcess:
     """`override_reason`: o coordenador pode avançar mesmo sem o documento que
     o guard exige, desde que diga o porquê — a justificativa fica no histórico.
@@ -158,6 +159,10 @@ def apply_transition(
         # nunca um número solto vindo de uma transição.
     if action == "emitir_nota_fiscal":
         process.final_value = final_value
+        if over_balance_warning is not None:
+            # já confirmado pela rota — só registra quem e quando
+            process.over_balance_confirmed_by = actor.username if actor else None
+            process.over_balance_confirmed_at = now
     if action in ("rejeitar", "cancelar"):
         process.cancel_reason = reason
         process.closed_at = now
@@ -180,6 +185,7 @@ def apply_transition(
             "motivo": reason,
             "valor_final": final_value,
             "requisito_dispensado": overridden,
+            "acima_do_saldo": over_balance_warning,
         },
     )
     try:

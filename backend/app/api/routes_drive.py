@@ -1,19 +1,23 @@
 """Drive do Financeiro: ler as pastas do projeto (plano, sem gravar),
 sincronizá-las com o banco e consultar/baixar os arquivos pelo programa.
 Tudo aqui é leitura do drive — o módulo nunca escreve nem apaga nada nele.
+
+O drive pode estar no disco deste servidor ou num PC distante, alcançado
+pelo Horun Agent (`MODULE_DRIVE_MODE`) — estas rotas não sabem qual:
+falam com `get_drive_backend()` (core/drive_backend.py), sempre com
+caminhos relativos à raiz do drive.
 """
 
 from __future__ import annotations
 
 import mimetypes
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.core.drive import DriveError, fs_path, project_drive_dir, safe_join
+from app.core.drive import DriveError, DriveNotFound, join_rel, project_folder
+from app.core.drive_backend import AGENT_OFFLINE_MESSAGE, DriveEntry, get_drive_backend, serve_file
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
 from app.db.models.project import Project, ProjectMembership
@@ -27,7 +31,7 @@ from app.schemas.drive import (
     ScanReportOut,
     SyncResultOut,
 )
-from app.services.drive_scan import scan_project_folder
+from app.services.drive_scan import scan_entries
 from app.services.drive_sync import SyncPlan, apply_sync, plan_sync
 from app.services.ledger import LedgerError, LedgerResult, read_ledger
 
@@ -41,28 +45,41 @@ def _project(session: Session, project_id: int) -> Project:
     return project
 
 
-def _project_dir(project: Project) -> str:
+def _folder(project: Project) -> str:
     try:
-        return str(project_drive_dir(project))
+        return project_folder(project.drive_folder)
     except DriveError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
+def _relative_to(folder: str, entries: list[DriveEntry]) -> list[DriveEntry]:
+    """Entradas do drive (relativas à raiz) -> relativas à pasta do projeto."""
+    prefix = folder + "/"
+    return [
+        DriveEntry(e.path[len(prefix):], e.is_dir, e.size) for e in entries if e.path.startswith(prefix)
+    ]
+
+
 def _build_plan(session: Session, project: Project, body: DriveScanRequest) -> SyncPlan:
-    project_dir = _project_dir(project)
+    folder = _folder(project)
+    backend = get_drive_backend()
     ledger: LedgerResult | None = None
     if body.ledger_path:
         if not body.ledger_path.lower().endswith(".xlsx"):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A planilha de valores precisa ser um .xlsx.")
         try:
-            ledger = read_ledger(str(safe_join(project_drive_dir(project), body.ledger_path)))
+            ledger = read_ledger(backend.read_bytes(join_rel(folder, body.ledger_path)))
+        except DriveNotFound as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Planilha não encontrada: {body.ledger_path}") from exc
         except (DriveError, LedgerError) as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     try:
-        scan = scan_project_folder(project_dir)
+        entries = backend.list_tree(folder)
+    except DriveError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except OSError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Não foi possível ler as pastas do drive: {exc}") from exc
-    return plan_sync(session, project, scan, ledger)
+    return plan_sync(session, project, scan_entries(_relative_to(folder, entries)), ledger)
 
 
 def _report(plan: SyncPlan) -> ScanReportOut:
@@ -103,18 +120,40 @@ def drive_status(
     _membership: ProjectMembership = Depends(get_membership),
 ):
     project = _project(session, project_id)
+    mode = settings.drive_mode
+    if mode == "agent":
+        # Sem ida ao PC aqui (a tela consulta o estado com frequência): só
+        # se algum agente foi visto agora há pouco, e se ele sabe listar pastas.
+        from app.services.agent_bridge import agent_state
+
+        state = agent_state()
+        message = None
+        if not state.online:
+            message = AGENT_OFFLINE_MESSAGE
+        elif not state.extended:
+            message = "O Horun Agent instalado é antigo para ler pastas — atualize para a versão 0.4.0 ou mais nova."
+        return DriveStatusOut(
+            configured=True, mode=mode, project_folder=project.drive_folder,
+            available=state.online and state.extended and bool(project.drive_folder),
+            message=message or (None if project.drive_folder else "Este projeto ainda não tem pasta do drive configurada."),
+        )
     if not settings.drive_root:
         return DriveStatusOut(
-            configured=False, project_folder=project.drive_folder, available=False,
+            configured=False, mode=mode, project_folder=project.drive_folder, available=False,
             message="O drive não está configurado neste servidor (MODULE_DRIVE_ROOT).",
         )
     try:
-        project_drive_dir(project)
+        get_drive_backend().list_tree(project_folder(project.drive_folder), recursive=False)
+    except DriveNotFound:
+        return DriveStatusOut(
+            configured=True, mode=mode, project_folder=project.drive_folder, available=False,
+            message=f"A pasta do projeto não existe no drive: {project.drive_folder}",
+        )
     except DriveError as exc:
         return DriveStatusOut(
-            configured=True, project_folder=project.drive_folder, available=False, message=str(exc)
+            configured=True, mode=mode, project_folder=project.drive_folder, available=False, message=str(exc)
         )
-    return DriveStatusOut(configured=True, project_folder=project.drive_folder, available=True)
+    return DriveStatusOut(configured=True, mode=mode, project_folder=project.drive_folder, available=True)
 
 
 @router.post("/scan", response_model=ScanReportOut)
@@ -151,28 +190,21 @@ def browse_drive(
     _membership: ProjectMembership = Depends(get_membership),
 ):
     project = _project(session, project_id)
+    folder = _folder(project)
     try:
-        base = project_drive_dir(project)
-        folder = safe_join(base, path)
+        rel = join_rel("", path)
+        listed = get_drive_backend().list_tree(join_rel(folder, rel), recursive=False)
+    except DriveNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pasta não encontrada.") from exc
     except DriveError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    if not os.path.isdir(fs_path(folder)):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pasta não encontrada.")
 
-    rel = path.replace("\\", "/").strip("/")
     entries: list[DriveEntryOut] = []
-    with os.scandir(fs_path(folder)) as it:
-        for entry in sorted(it, key=lambda e: (not e.is_dir(), e.name.casefold())):
-            if entry.name.startswith("~$") or entry.name.startswith("."):
-                continue
-            entries.append(
-                DriveEntryOut(
-                    name=entry.name,
-                    is_dir=entry.is_dir(),
-                    rel_path=f"{rel}/{entry.name}" if rel else entry.name,
-                    size_bytes=None if entry.is_dir() else entry.stat().st_size,
-                )
-            )
+    for entry in sorted(_relative_to(folder, listed), key=lambda e: (not e.is_dir, e.path.rsplit("/", 1)[-1].casefold())):
+        name = entry.path.rsplit("/", 1)[-1]
+        if name.startswith("~$") or name.startswith("."):
+            continue
+        entries.append(DriveEntryOut(name=name, is_dir=entry.is_dir, rel_path=entry.path, size_bytes=entry.size))
     parent = None if not rel else (rel.rsplit("/", 1)[0] if "/" in rel else "")
     return DriveBrowseOut(path=rel, parent=parent, entries=entries)
 
@@ -185,11 +217,11 @@ def download_drive_file(
     _membership: ProjectMembership = Depends(get_membership),
 ):
     project = _project(session, project_id)
+    folder = _folder(project)
+    name = path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
     try:
-        target = fs_path(safe_join(project_drive_dir(project), path))
+        return serve_file(join_rel(folder, path), name, mimetypes.guess_type(name)[0] or "application/octet-stream")
+    except DriveNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado.") from exc
     except DriveError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    if not os.path.isfile(target):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado.")
-    name = os.path.basename(path.replace("\\", "/"))
-    return FileResponse(target, media_type=mimetypes.guess_type(name)[0] or "application/octet-stream", filename=name)

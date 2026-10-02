@@ -8,6 +8,7 @@ import { ActionPanel } from '../components/purchases/ActionPanel'
 import { DocumentsSection } from '../components/purchases/DocumentsSection'
 import { ProcessHistory } from '../components/purchases/ProcessHistory'
 import { MoneyValue } from '../components/common/MoneyValue'
+import { OverBalanceAlert } from '../components/purchases/OverBalanceAlert'
 import type { ProjectContext } from './ProjectLayout'
 
 export function PurchaseProcessDetailPage() {
@@ -39,6 +40,7 @@ export function PurchaseProcessDetailPage() {
     vendor?: string
     final_value?: string
     override_reason?: string
+    confirm_over_balance?: boolean
   }) {
     await purchasesApi.transition(project.id, process!.id, input)
     load()
@@ -106,6 +108,12 @@ export function PurchaseProcessDetailPage() {
       {process.status === 'rejeitado' && process.cancel_reason && (
         <p className="mb-4 rounded-md px-3 py-2 text-sm" style={{ background: '#fee2e2', color: '#b91c1c' }}>
           Rejeitado pela COPPETEC: {process.cancel_reason}
+        </p>
+      )}
+
+      {process.over_balance_confirmed_at && (
+        <p className="mb-4">
+          <OverBalanceAlert process={process} withLabel />
         </p>
       )}
 

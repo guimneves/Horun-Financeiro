@@ -39,11 +39,13 @@ export interface BudgetItem {
   item_number: number
   description: string
   justification: string
-  unit_value: string
+  // null quando o backend não revela valor pra este usuário (colaborador sem sessão de coordenador).
+  unit_value: string | null
   planned_quantity: string
-  planned_value: string
-  yield_amount: string
+  planned_value: string | null
+  yield_amount: string | null
   note: string
+  coppetec_process_number: string | null
 }
 
 export interface ItemBalance {
@@ -52,13 +54,15 @@ export interface ItemBalance {
   item_number: number
   description: string
   justification: string
-  unit_value: string
+  unit_value: string | null
   planned_quantity: string
-  planned_value: string
-  yield_amount: string
-  committed: string
-  executed: string
-  balance: string
+  planned_value: string | null
+  yield_amount: string | null
+  committed: string | null
+  executed: string | null
+  balance: string | null
+  has_balance: boolean
+  coppetec_process_number: string | null
   /** "Quant. Disponível" da planilha; nulo na Equipe Executora */
   available_quantity: string | null
 }
@@ -67,11 +71,12 @@ export interface CategorySummary {
   category: string
   label: string
   group: 'capital' | 'corrente'
-  planned_value: string
-  yield_amount: string
-  committed: string
-  executed: string
-  balance: string
+  planned_value: string | null
+  yield_amount: string | null
+  committed: string | null
+  executed: string | null
+  balance: string | null
+  has_balance: boolean
 }
 
 export interface Installment {

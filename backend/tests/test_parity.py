@@ -62,11 +62,12 @@ def test_installments_and_utilization_follow_the_spreadsheet_rule(client):
     assert [p["number"] for p in parcelas] == [1, 2, 3]
     assert [Decimal(p["cumulative_amount"]) for p in parcelas] == [400, 1000, 2000]
     assert Decimal(parcelas[0]["utilization"]) == 0 and parcelas[1]["utilization"] is None
+    assert client.get(url, headers=COLAB).status_code == 403  # valores: só coordenador
 
     process = _create_process(client, project, item, estimated_unit_value="500", quantity="1")
     _authorize(client, project, process["id"])  # realizado = 500
 
-    parcelas = client.get(url, headers=COLAB).json()
+    parcelas = client.get(url, headers=ADMIN).json()
     assert Decimal(parcelas[0]["utilization"]) == Decimal("1.0000")  # 500 ÷ 400, no máximo 100%
     assert Decimal(parcelas[1]["utilization"]) == Decimal("0.5000")  # 400 cobertos → 500 ÷ 1000
     assert parcelas[2]["utilization"] is None  # 1000 não foram cobertos ainda
@@ -78,7 +79,9 @@ def test_overview_matches_quadro_resumo_groups_and_total(client):
     _authorize(client, project, process["id"])
     _create_process(client, project, item, estimated_unit_value="200", quantity="1")  # comprometido
 
-    overview = client.get(f"/projects/{project['id']}/overview", headers=COLAB).json()
+    # valores em R$: colaborador não vê (core/redaction.py)
+    assert client.get(f"/projects/{project['id']}/overview", headers=COLAB).status_code == 403
+    overview = client.get(f"/projects/{project['id']}/overview", headers=ADMIN).json()
     groups = {g["group"]: g for g in overview["groups"]}
     assert Decimal(groups["capital"]["planned_value"]) == 10000
     assert Decimal(groups["capital"]["executed"]) == 500
@@ -131,7 +134,7 @@ def test_coordinator_can_skip_document_requirement_with_a_reason(client):
     events = client.get(
         f"/projects/{project['id']}/events",
         params={"entity_type": "purchase_process", "entity_id": process["id"]},
-        headers=COLAB,
+        headers=ADMIN,
     ).json()
     moved = next(e for e in events if e["action"] == "avancar_cotacao")
     assert "Cotação por e-mail, anexo depois" in moved["detail"]  # a justificativa fica registrada
@@ -156,7 +159,7 @@ def test_event_history_records_who_did_what(client):
     events = client.get(
         f"/projects/{project['id']}/events",
         params={"entity_type": "purchase_process", "entity_id": process["id"]},
-        headers=COLAB,
+        headers=ADMIN,
     ).json()
     actions = [e["action"] for e in reversed(events)]  # do mais antigo ao mais novo
     assert actions == [
@@ -165,6 +168,16 @@ def test_event_history_records_who_did_what(client):
     ]
     authorized = events[0]
     assert authorized["username"] == "admin" and "autorizado" in authorized["detail"]
+
+    # colaborador vê o histórico (quem fez o quê e quando), mas sem o
+    # detalhe — que traz valores estimados/finais
+    colab_events = client.get(
+        f"/projects/{project['id']}/events",
+        params={"entity_type": "purchase_process", "entity_id": process["id"]},
+        headers=COLAB,
+    ).json()
+    assert [e["action"] for e in colab_events] == [e["action"] for e in events]
+    assert all(e["detail"] == "{}" for e in colab_events)
 
 
 def test_event_history_is_visible_only_to_members(client):

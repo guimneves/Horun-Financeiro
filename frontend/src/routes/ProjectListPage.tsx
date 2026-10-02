@@ -1,19 +1,9 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { projectsApi } from '../api/projects'
-import type { Project } from '../types'
+import { useProjects } from '../context/ProjectsContext'
 import { StatusBadge } from '../components/common/StatusBadge'
 
 export function ProjectListPage() {
-  const [projects, setProjects] = useState<Project[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    projectsApi
-      .list()
-      .then(setProjects)
-      .catch((err) => setError(err.message))
-  }, [])
+  const { projects, error } = useProjects()
 
   if (error) return <p className="p-6 text-red-600">Erro ao carregar projetos: {error}</p>
   if (projects === null) return <p className="p-6">Carregando…</p>
