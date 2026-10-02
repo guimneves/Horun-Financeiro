@@ -21,8 +21,19 @@ export interface ProjectUpdateInput {
   balance_policy?: 'bloquear' | 'avisar'
 }
 
+export interface ProjectCreateInput {
+  code: string
+  name: string
+  funding_agency?: string
+  foundation?: string
+  start_date?: string | null
+  end_date?: string | null
+}
+
 export const projectsApi = {
   list: () => api.get<Project[]>('/projects'),
+  /** só o admin do Core; quem cria entra como coordenador do projeto */
+  create: (body: ProjectCreateInput) => api.post<Project>('/projects', body),
   get: (projectId: number) => api.get<Project>(`/projects/${projectId}`),
   update: (projectId: number, body: ProjectUpdateInput) => api.patch<Project>(`/projects/${projectId}`, body),
 

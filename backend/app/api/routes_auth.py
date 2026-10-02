@@ -21,6 +21,19 @@ from app.schemas.auth import CoordenadorLoginRequest, CoordenadorLoginResponse, 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+@router.get("/me")
+def whoami(identity: HorunIdentity = Depends(get_identity)) -> dict:
+    """Quem é a pessoa, para a tela decidir o que mostrar (ex. "Novo
+    projeto" só para o admin do Core, que é quem pode criar — a rota
+    continua conferindo por conta própria)."""
+    return {
+        "user_id": identity.user_id,
+        "username": identity.username,
+        "role": identity.role,
+        "is_core_admin": identity.role == "admin",
+    }
+
+
 def _get_module_settings(session: Session) -> ModuleSettings:
     settings_row = session.get(ModuleSettings, 1)
     if settings_row is None:

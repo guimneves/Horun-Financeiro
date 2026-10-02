@@ -104,3 +104,38 @@ class CategorySummaryOut(BaseModel):
     executed: Decimal | None
     balance: Decimal | None
     has_balance: bool
+
+
+class BudgetImportItemOut(BaseModel):
+    category: str
+    item_number: int
+    description: str
+    justification: str
+    unit_value: Decimal
+    planned_quantity: Decimal
+    planned_value: Decimal
+    yield_amount: Decimal
+    sheet_row: int
+
+
+class BudgetImportCategoryOut(BaseModel):
+    category: str
+    label: str
+    count: int
+    planned_total: Decimal
+    yield_total: Decimal
+
+
+class BudgetImportPreviewOut(BaseModel):
+    """O que a importação da aba "Saldo por Item" criaria — nada gravado."""
+
+    categories: list[BudgetImportCategoryOut]
+    items: list[BudgetImportItemOut]
+    skipped_sections: list[str]
+    warnings: list[str]
+
+
+class BudgetImportResultOut(BaseModel):
+    revision: RevisionOut
+    items_created: int
+    warnings: list[str]

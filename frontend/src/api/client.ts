@@ -25,7 +25,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      // FormData (envio de arquivo): o navegador põe o Content-Type com o boundary
+      ...(typeof init?.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
       ...(coordenadorToken ? { 'X-Horun-Coordenador-Token': coordenadorToken } : {}),
       ...(devIdentity
         ? { 'X-Horun-User-Id': devIdentity.userId, 'X-Horun-User': devIdentity.username, 'X-Horun-Role': 'admin' }
@@ -58,4 +59,5 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body !== undefined ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
 }

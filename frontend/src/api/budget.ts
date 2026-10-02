@@ -27,7 +27,44 @@ export interface BudgetItemUpdateInput {
   coppetec_process_number?: string
 }
 
+export interface BudgetImportCategory {
+  category: string
+  label: string
+  count: number
+  planned_total: string
+  yield_total: string
+}
+
+export interface BudgetImportPreview {
+  categories: BudgetImportCategory[]
+  items: { category: string; item_number: number; description: string; planned_value: string }[]
+  skipped_sections: string[]
+  warnings: string[]
+}
+
+export interface BudgetImportResult {
+  revision: Revision
+  items_created: number
+  warnings: string[]
+}
+
+function sheetForm(file: File, fields: Record<string, string> = {}): FormData {
+  const form = new FormData()
+  for (const [key, value] of Object.entries(fields)) form.append(key, value)
+  form.append('file', file)
+  return form
+}
+
 export const budgetApi = {
+  /** aba "Saldo por Item" da planilha de acompanhamento — não grava nada */
+  importPreview: (projectId: number, file: File) =>
+    api.postForm<BudgetImportPreview>(`/projects/${projectId}/budget-import/preview`, sheetForm(file)),
+  /** cria uma revisão NOVA, em rascunho, com os itens da planilha */
+  importBudget: (projectId: number, file: File, label: string, effectiveDate: string) =>
+    api.postForm<BudgetImportResult>(
+      `/projects/${projectId}/budget-import`,
+      sheetForm(file, { label, effective_date: effectiveDate }),
+    ),
   categories: () => api.get<Category[]>('/categories'),
   balance: (projectId: number) => api.get<ItemBalance[]>(`/projects/${projectId}/balance`),
   summary: (projectId: number) => api.get<CategorySummary[]>(`/projects/${projectId}/summary`),
