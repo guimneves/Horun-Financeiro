@@ -9,10 +9,29 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 134 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 172 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Importar o orçamento da planilha; criar projeto pela tela
+
+- **Importar da planilha** (Revisões → "Importar da planilha"): lê a aba
+  "Saldo por Item" da planilha de acompanhamento e cria uma revisão NOVA em
+  rascunho com todos os itens (categoria, nº, descrição, justificativa,
+  V. unitário, quantidade, rendimentos) — antes, ~140 itens à mão. Prévia
+  por categoria antes de gravar (`POST .../budget-import/preview`), nada
+  vale até ativar. Colunas achadas pelo título de cada seção (o cabeçalho
+  muda entre elas; sem V. unitário/Quant., entra quantidade 1). Equipe
+  Executora fica de fora (tela de Pessoal); subitem com número decimal
+  ("1.1") vira aviso com o valor. Conferido com a planilha real: os totais
+  batem com o Quadro Resumo e, depois, "Ler pastas" achou item para todos
+  os 420 processos. `services/budget_import.py`, `tests/test_budget_import.py`
+  (planilha sintética).
+- **Novo projeto pela tela** (lista de projetos, só admin do Core): a rota
+  existia, mas não havia botão. `GET /api/auth/me` diz à tela quem é admin.
+- `api.postForm` no frontend; o `Content-Type: application/json` só vai em
+  corpo JSON (antes ia em qualquer corpo).
 
 ## 01/10/2026 — Trabalho de 27–28/09 integrado + nota fiscal acima do saldo
 

@@ -9,11 +9,13 @@ antigos, nunca sobrescritos. Editar itens só é permitido em revisões
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
+from app.core.files import read_upload_limited
 from app.core.money import round_money
 from app.core.permissions import get_membership, require_coordenador
 from app.core.redaction import money
@@ -21,6 +23,10 @@ from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition,
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
 from app.schemas.budget import (
+    BudgetImportCategoryOut,
+    BudgetImportItemOut,
+    BudgetImportPreviewOut,
+    BudgetImportResultOut,
     BudgetItemCreate,
     BudgetItemOut,
     BudgetItemUpdate,
@@ -31,6 +37,7 @@ from app.schemas.budget import (
     YieldUpdate,
 )
 from app.services.balance import category_summary, item_balances
+from app.services.budget_import import BudgetImportError, BudgetSheetResult, parse_budget_sheet
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["budget"])
 
@@ -379,3 +386,117 @@ def get_summary(
         )
         for r in rows
     ]
+
+
+# ------------------------------------------------- importar da planilha
+
+
+async def _parse_upload(file: UploadFile) -> BudgetSheetResult:
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Envie a planilha de acompanhamento (.xlsx).")
+    content, _digest = await read_upload_limited(file)
+    try:
+        return parse_budget_sheet(content)
+    except BudgetImportError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+def _preview(result: BudgetSheetResult) -> BudgetImportPreviewOut:
+    categories: list[BudgetImportCategoryOut] = []
+    for key, meta in EXPENSE_CATEGORIES.items():
+        items = [i for i in result.items if i.category == key]
+        if items:
+            categories.append(BudgetImportCategoryOut(
+                category=key, label=str(meta["label"]), count=len(items),
+                planned_total=round_money(sum((i.planned_value for i in items), Decimal("0"))),
+                yield_total=round_money(sum((i.yield_amount for i in items), Decimal("0"))),
+            ))
+    return BudgetImportPreviewOut(
+        categories=categories,
+        items=[BudgetImportItemOut(**i.__dict__) for i in result.items],
+        skipped_sections=result.skipped_sections,
+        warnings=result.warnings,
+    )
+
+
+@router.post("/budget-import/preview", response_model=BudgetImportPreviewOut)
+async def preview_budget_import(
+    project_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(require_coordenador),
+):
+    """Lê a aba "Saldo por Item" da planilha de acompanhamento e devolve os
+    itens que seriam criados, por categoria, com os avisos — não grava nada."""
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
+    return _preview(await _parse_upload(file))
+
+
+@router.post("/budget-import", response_model=BudgetImportResultOut, status_code=status.HTTP_201_CREATED)
+async def import_budget(
+    project_id: int,
+    file: UploadFile = File(...),
+    label: str = Form("Importada da planilha"),
+    effective_date: date = Form(...),
+    session: Session = Depends(get_session),
+    membership: ProjectMembership = Depends(require_coordenador),
+):
+    """Cria uma revisão NOVA, em rascunho, com todos os itens da planilha —
+    sem clonar a revisão ativa (o orçamento vem inteiro da planilha). Nada
+    vale até ativar a revisão, depois de conferir no editor."""
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
+    result = await _parse_upload(file)
+    if not result.items:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Nenhum item encontrado na planilha.")
+
+    last = session.exec(
+        select(BudgetRevision)
+        .where(BudgetRevision.project_id == project_id)
+        .order_by(BudgetRevision.revision_number.desc())
+    ).first()
+    revision = BudgetRevision(
+        project_id=project_id,
+        revision_number=0 if last is None else last.revision_number + 1,
+        label=label.strip() or "Importada da planilha",
+        status="rascunho",
+        effective_date=effective_date,
+        note=f"Importada da planilha {file.filename} (aba \"Saldo por Item\").",
+        created_by_user_id=membership.user_id,
+        created_by_username=membership.username,
+    )
+    session.add(revision)
+    session.commit()
+    session.refresh(revision)
+
+    positions = {
+        (p.category, p.item_number): p
+        for p in session.exec(select(BudgetPosition).where(BudgetPosition.project_id == project_id)).all()
+    }
+    for imported in result.items:
+        key = (imported.category, imported.item_number)
+        position = positions.get(key)
+        if position is None:
+            position = BudgetPosition(project_id=project_id, category=imported.category, item_number=imported.item_number)
+            session.add(position)
+            session.flush()
+            positions[key] = position
+        session.add(BudgetItem(
+            revision_id=revision.id,
+            position_id=position.id,
+            description=imported.description,
+            justification=imported.justification,
+            unit_value=imported.unit_value,
+            planned_quantity=imported.planned_quantity,
+            planned_value=imported.planned_value,
+            yield_amount=imported.yield_amount,
+        ))
+    session.commit()
+    session.refresh(revision)
+    return BudgetImportResultOut(
+        revision=RevisionOut.model_validate(revision, from_attributes=True),
+        items_created=len(result.items),
+        warnings=result.warnings,
+    )

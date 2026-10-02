@@ -3,6 +3,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { budgetApi } from '../api/budget'
 import type { Revision } from '../types'
 import { StatusBadge } from '../components/common/StatusBadge'
+import { BudgetImportPanel } from '../components/budget/BudgetImportPanel'
 import type { ProjectContext } from './ProjectLayout'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -17,6 +18,7 @@ export function BudgetRevisionsPage() {
   const [revisions, setRevisions] = useState<Revision[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [label, setLabel] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -58,15 +60,37 @@ export function BudgetRevisionsPage() {
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           Revisões orçamentárias
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowNew(true)}
-          className="rounded-md px-4 py-2 text-sm font-medium"
-          style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
-        >
-          + Nova reformulação
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="rounded-md border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Importar da planilha
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="rounded-md px-4 py-2 text-sm font-medium"
+            style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
+          >
+            + Nova reformulação
+          </button>
+        </div>
       </div>
+
+      {showImport && (
+        <BudgetImportPanel
+          projectId={project.id}
+          onClose={() => setShowImport(false)}
+          onImported={(revisionId) => {
+            setShowImport(false)
+            load()
+            navigate(`/projects/${project.id}/revisions/${revisionId}/edit`)
+          }}
+        />
+      )}
 
       {showNew && (
         <div
