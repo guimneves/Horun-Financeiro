@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { authApi } from '../api/auth'
+import { AgentPanel } from '../components/AgentPanel'
 
 export function OrganizationPage() {
   const [current, setCurrent] = useState('')
@@ -33,7 +34,8 @@ export function OrganizationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md p-6">
+    <div className="p-6">
+    <div className="mx-auto max-w-md">
       <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
         Organização interna
       </h2>
@@ -103,6 +105,12 @@ export function OrganizationPage() {
           {submitting ? 'Trocando…' : 'Trocar senha'}
         </button>
       </div>
+    </div>
+
+    {/* só aparece para o admin do Core (a listagem dá 403 para os outros) */}
+    <div className="mx-auto mt-8 max-w-3xl">
+      <AgentPanel />
+    </div>
     </div>
   )
 }

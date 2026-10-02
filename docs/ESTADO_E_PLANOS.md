@@ -183,9 +183,10 @@ de liberar o gateway do Core).
    `curl http://<servidor>:8002/agent/enroll-codes` → 404.
 3. **Compose de produção**: `MODULE_DRIVE_MODE=agent`, `MODULE_DRIVE_AGENT_ROOT`
    (padrão `financeiro`), timeout/limites (`core/config.py`).
-4. **Tela de admin do agente** (gerar código, ver/revogar instalações): as rotas
-   existem (`/api/agent/enroll-codes`, `/devices`); o RE7S tem um painel pronto
-   para copiar (`frontend/src/components/AgentPanel.tsx`).
+4. ~~Tela de admin do agente~~ — feita: painel "Horun Agent (drive)" em
+   Organização (`components/AgentPanel.tsx`, o mesmo do RE7S): gerar código de
+   instalação, ver instalações (conectado/sem sinal, versão) e revogar. Só o
+   admin do Core enxerga (para os outros a listagem dá 403 e o painel some).
 5. No PC do OneDrive: Agent-Horun 0.4.0, `config.json` com o root `financeiro`
    em `"mode": "read"` (ou `"read_only": true`) apontando para a pasta que
    contém as pastas dos projetos.
