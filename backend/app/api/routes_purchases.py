@@ -477,6 +477,7 @@ def download_document(
     project_id: int,
     process_id: int,
     doc_id: int,
+    inline: bool = False,
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
@@ -486,7 +487,7 @@ def download_document(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado.")
     project = session.get(Project, project_id)
     try:
-        return document_response(project, doc)
+        return document_response(project, doc, inline=inline)
     except DriveNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado no armazenamento.") from exc
     except DriveError as exc:

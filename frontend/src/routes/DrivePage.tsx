@@ -4,6 +4,7 @@ import { driveApi } from '../api/drive'
 import type { DriveBrowse, DriveStatus, ScanReport, SyncResult } from '../types/drive'
 import { PURCHASE_STATUS_LABELS } from '../types/purchase'
 import { MoneyValue } from '../components/common/MoneyValue'
+import { FilePreviewModal, previewKind } from '../components/common/FilePreviewModal'
 import type { ProjectContext } from './ProjectLayout'
 
 const ACTION_LABELS: Record<string, string> = {
@@ -338,6 +339,8 @@ function Browser({ projectId }: { projectId: number }) {
   const path = params.get('path') ?? ''
   const [listing, setListing] = useState<DriveBrowse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // arquivo aberto no leitor (sem baixar)
+  const [viewing, setViewing] = useState<{ name: string; relPath: string } | null>(null)
 
   useEffect(() => {
     setError(null)
@@ -384,16 +387,41 @@ function Browser({ projectId }: { projectId: number }) {
                   📁 {entry.name}
                 </button>
               ) : (
-                <a href={driveApi.fileUrl(projectId, entry.rel_path)} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
-                  📄 {entry.name}
-                </a>
+                previewKind(entry.name) ? (
+                  <button
+                    type="button"
+                    className="text-left"
+                    style={{ color: 'var(--color-primary)' }}
+                    title="Abrir para ler, sem baixar"
+                    onClick={() => setViewing({ name: entry.name, relPath: entry.rel_path })}
+                  >
+                    📄 {entry.name}
+                  </button>
+                ) : (
+                  <a href={driveApi.fileUrl(projectId, entry.rel_path)} style={{ color: 'var(--color-primary)' }}>
+                    📄 {entry.name}
+                  </a>
+                )
               )}
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="flex shrink-0 items-center gap-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {!entry.is_dir && (
+                  <a href={driveApi.fileUrl(projectId, entry.rel_path)} title="Baixar" style={{ color: 'var(--color-text-muted)' }}>
+                    baixar
+                  </a>
+                )}
                 {fileSize(entry.size_bytes)}
               </span>
             </li>
           ))}
         </ul>
+      )}
+      {viewing && (
+        <FilePreviewModal
+          filename={viewing.name}
+          downloadUrl={driveApi.fileUrl(projectId, viewing.relPath)}
+          kind={previewKind(viewing.name)!}
+          onClose={() => setViewing(null)}
+        />
       )}
     </div>
   )

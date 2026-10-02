@@ -9,10 +9,23 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 172 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 180 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
 
 ---
+
+## 02/10/2026 — Ler arquivos sem baixar
+
+- **Leitor na página**: clicar num PDF, imagem ou .txt (navegação do Drive e
+  documentos do processo de compra) abre o arquivo numa janela sobre a
+  página, no leitor do próprio navegador — com "Abrir em nova aba" e
+  "Baixar". As rotas de arquivo aceitam `?inline=true`; só PDF, imagem
+  (png/jpg/gif/webp) e texto são exibidos (`PREVIEWABLE_TYPES` em
+  `core/files.py`), o resto continua download — um HTML ou SVG exibido
+  dentro do Horun rodaria script com a sessão de quem abriu. Sempre com
+  `X-Content-Type-Options: nosniff`. `tests/test_file_preview.py`.
+- Modo dev: `VITE_API_URL` (frontend) e CORS para qualquer porta local —
+  permite uma segunda cópia para teste ao lado da que está aberta.
 
 ## 02/10/2026 — Importar o orçamento da planilha; criar projeto pela tela
 

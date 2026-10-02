@@ -205,3 +205,21 @@ def test_new_files_are_picked_up_on_the_next_sync(client, agent, drive):  # noqa
     _touch(drive / "Material de consumo - Nacional" / "Item 1 - Tubos e conexões" / "2024-1001 Tubo inox" / "boleto.pdf")
     again = client.post(url, json=LEDGER, headers=ADMIN).json()
     assert again["processos_criados"] == 0 and again["arquivos_vinculados"] == 1
+
+
+def test_pdf_is_shown_inline_through_the_agent_but_html_is_not(client, agent, drive):  # noqa: F811
+    folder = "Material de consumo - Nacional/Item 1 - Tubos e conexões"
+    _touch(drive / folder / "nota.pdf")
+    _touch(drive / folder / "pagina.html", b"<script>alert(1)</script>")
+    project = _project_with_budget(client)
+
+    def disposition(name):
+        r = client.get(
+            f"/projects/{project['id']}/drive/file", params={"path": f"{folder}/{name}", "inline": "true"}, headers=COLAB
+        )
+        assert r.status_code == 200, r.text
+        assert r.headers["x-content-type-options"] == "nosniff"
+        return r.headers["content-disposition"]
+
+    assert disposition("nota.pdf").startswith("inline")
+    assert disposition("pagina.html").startswith("attachment")

@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import Response
-from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.drive import DriveError, DriveNotFound, drive_root, fs_path, join_rel, safe_join
@@ -142,18 +141,27 @@ def get_drive_backend() -> DriveBackend:
     return LocalDrive(drive_root())
 
 
-def serve_file(path: str, filename: str, media_type: str) -> Response:
-    """Resposta de download de um arquivo do drive — direto do disco quando o
-    drive é local, ou buscado pelo agente (em memória, com limite de tamanho)."""
+def serve_file(path: str, filename: str, media_type: str | None, *, inline: bool = False) -> Response:
+    """Resposta de um arquivo do drive — direto do disco quando o drive é
+    local, ou buscado pelo agente (em memória, com limite de tamanho).
+    `inline`: exibir na página em vez de baixar, só para os tipos de
+    `PREVIEWABLE_TYPES` (core/files.py)."""
+    from urllib.parse import quote
+
+    from app.core.files import PREVIEWABLE_TYPES, file_response
+
     backend = get_drive_backend()
     local = backend.local_path(path)
     if local is not None:
-        return FileResponse(local, media_type=media_type, filename=filename)
+        return file_response(local, filename, media_type, inline=inline)
     data = backend.read_bytes(path, max_bytes=settings.agent_max_file_bytes)
-    from urllib.parse import quote
-
+    media_type = (media_type or "application/octet-stream").split(";")[0].strip().lower()
+    disposition = "inline" if inline and media_type in PREVIEWABLE_TYPES else "attachment"
     return Response(
         content=data,
         media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(filename)}",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

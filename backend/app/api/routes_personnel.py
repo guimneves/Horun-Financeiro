@@ -7,10 +7,9 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
-from app.core.files import delete_file, read_upload_limited, resolve_path, save_upload
+from app.core.files import delete_file, file_response, read_upload_limited, resolve_path, save_upload
 from app.core.identity import HorunIdentity, get_identity
 from app.core.permissions import get_membership, require_coordenador
 from app.core.redaction import money
@@ -278,6 +277,7 @@ def download_assignment_document(
     project_id: int,
     assignment_id: int,
     doc_id: int,
+    inline: bool = False,
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
@@ -288,7 +288,7 @@ def download_assignment_document(
     path = resolve_path(doc.storage_path)
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado no armazenamento.")
-    return FileResponse(path, media_type=doc.content_type, filename=doc.original_filename)
+    return file_response(path, doc.original_filename, doc.content_type, inline=inline)
 
 
 @router.delete("/personnel-assignments/{assignment_id}/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { purchasesApi } from '../../api/purchases'
 import type { PurchaseDocument } from '../../types/purchase'
 import { DOC_TYPE_LABELS } from '../../types/purchase'
+import { FilePreviewModal, previewKind } from '../common/FilePreviewModal'
 
 const UPLOADABLE_TYPES = ['cotacao', 'solicitacao_autorizacao', 'nota_fiscal', 'comprovante_recebimento', 'outro']
 
@@ -18,6 +19,8 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
   const [docs, setDocs] = useState<PurchaseDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadingType, setUploadingType] = useState<string | null>(null)
+  // documento aberto no leitor (sem baixar)
+  const [viewing, setViewing] = useState<PurchaseDocument | null>(null)
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const load = useCallback(() => {
@@ -119,15 +122,25 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                 {items.map((doc) => (
                   <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 truncate">
-                      <a
-                        href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: 'var(--color-primary)' }}
-                        title={doc.original_filename}
-                      >
-                        {doc.original_filename}
-                      </a>
+                      {previewKind(doc.original_filename) ? (
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => setViewing(doc)}
+                          style={{ color: 'var(--color-primary)' }}
+                          title={`${doc.original_filename} — abrir para ler, sem baixar`}
+                        >
+                          {doc.original_filename}
+                        </button>
+                      ) : (
+                        <a
+                          href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
+                          style={{ color: 'var(--color-primary)' }}
+                          title={doc.original_filename}
+                        >
+                          {doc.original_filename}
+                        </a>
+                      )}
                       {doc.storage_kind === 'drive' && (
                         <span className="ml-1 text-xs" style={{ color: 'var(--color-text-muted)' }} title="Arquivo no drive do projeto">
                           · drive
@@ -135,6 +148,14 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                       )}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
+                        className="text-xs"
+                        style={{ color: 'var(--color-text-muted)' }}
+                        title="Baixar"
+                      >
+                        baixar
+                      </a>
                       <select
                         aria-label="Tipo do documento"
                         className="rounded border px-1 py-0.5 text-xs"
@@ -167,6 +188,14 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
           </div>
         )
       })}
+      {viewing && (
+        <FilePreviewModal
+          filename={viewing.original_filename}
+          downloadUrl={purchasesApi.downloadUrl(projectId, processId, viewing.id)}
+          kind={previewKind(viewing.original_filename)!}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   )
 }

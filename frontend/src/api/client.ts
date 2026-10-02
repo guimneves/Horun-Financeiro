@@ -8,7 +8,9 @@ import { getDevIdentity } from '../lib/devIdentity'
 // porta 8000 (padrão do contrato de módulo). Toda rota da API fica sob
 // /api — é o que o gateway do Core usa pra separar API de estáticos.
 export const API_BASE =
-  (import.meta.env.DEV ? 'http://localhost:8000' : import.meta.env.BASE_URL.replace(/\/$/, '')) + '/api'
+  (import.meta.env.DEV
+    ? (import.meta.env.VITE_API_URL ?? 'http://localhost:8000') // VITE_API_URL: outra porta, para testes
+    : import.meta.env.BASE_URL.replace(/\/$/, '')) + '/api'
 
 export class ApiError extends Error {
   status: number

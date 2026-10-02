@@ -213,6 +213,7 @@ def browse_drive(
 def download_drive_file(
     project_id: int,
     path: str,
+    inline: bool = False,
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(get_membership),
 ):
@@ -220,7 +221,8 @@ def download_drive_file(
     folder = _folder(project)
     name = path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
     try:
-        return serve_file(join_rel(folder, path), name, mimetypes.guess_type(name)[0] or "application/octet-stream")
+        # inline: exibir na página (PDF, imagem, texto) em vez de baixar
+        return serve_file(join_rel(folder, path), name, mimetypes.guess_type(name)[0] or "application/octet-stream", inline=inline)
     except DriveNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo não encontrado.") from exc
     except DriveError as exc:

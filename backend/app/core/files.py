@@ -65,18 +65,18 @@ def resolve_path(storage_path: str) -> Path:
     return UPLOAD_ROOT / storage_path
 
 
-def document_response(project: Project, doc: Document) -> Response:
+def document_response(project: Project, doc: Document, *, inline: bool = False) -> Response:
     """Download de um documento. Os do tipo "drive" vêm do drive do projeto
     (disco deste servidor ou Horun Agent — `core/drive_backend.py`):
     `DriveNotFound` se o arquivo sumiu de lá, `DriveError` se o drive não
     estiver acessível."""
     if doc.storage_kind == "drive":
         path = join_rel(project_folder(project.drive_folder), doc.storage_path)
-        return serve_file(path, doc.original_filename, doc.content_type)
+        return serve_file(path, doc.original_filename, doc.content_type, inline=inline)
     target = fs_path(resolve_path(doc.storage_path))
     if not os.path.isfile(target):
         raise DriveNotFound("Arquivo não encontrado no armazenamento.")
-    return FileResponse(target, media_type=doc.content_type, filename=doc.original_filename)
+    return file_response(target, doc.original_filename, doc.content_type, inline=inline)
 
 
 def delete_file(storage_path: str) -> None:
@@ -84,3 +84,27 @@ def delete_file(storage_path: str) -> None:
     path = resolve_path(storage_path)
     if path.exists():
         path.unlink()
+
+
+# Tipos que podem ser EXIBIDOS na página (leitor do navegador) em vez de
+# baixados — pedido do usuário: ler os PDFs sem baixar. Lista fechada de
+# propósito: um HTML ou SVG aberto dentro do Horun rodaria script com a
+# sessão de quem abriu; esses continuam sempre como download.
+PREVIEWABLE_TYPES = frozenset({
+    "application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain",
+})
+
+
+def file_response(path: str | os.PathLike[str], filename: str, media_type: str | None, *, inline: bool = False) -> FileResponse:
+    """Resposta de arquivo: download (padrão) ou exibição na página, se
+    `inline` e o tipo estiver em `PREVIEWABLE_TYPES`."""
+    media_type = (media_type or "application/octet-stream").split(";")[0].strip().lower()
+    show = inline and media_type in PREVIEWABLE_TYPES
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="inline" if show else "attachment",
+        # o navegador nunca "adivinha" outro tipo (ex. tratar como HTML)
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
