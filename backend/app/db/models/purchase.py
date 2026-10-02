@@ -77,6 +77,10 @@ class PurchaseProcess(SQLModel, table=True):
     # autorizar pelo módulo, ou informada à mão. Nula nos importados do drive:
     # o gráfico de ritmo estima pelo nº de processo (services/pace.py).
     realized_on: date | None = None
+    # Lançamento da planilha SEM nº de processo (DOA, ressarcimento, passagem
+    # pela agência...): identidade da linha, para a sincronização não duplicar
+    # (services/ledger.py `UnnumberedEntry.ref`).
+    ledger_ref: str | None = Field(default=None, index=True)
     closed_at: datetime | None = None  # setado em rejeitado/cancelado também
     # Nota fiscal registrada ACIMA do saldo do item, confirmada por alguém
     # depois do aviso (routes_purchases.transition_process). Nunca bloqueia —

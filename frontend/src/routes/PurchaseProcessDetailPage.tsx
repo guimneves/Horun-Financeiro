@@ -69,6 +69,13 @@ export function PurchaseProcessDetailPage() {
         <PurchaseStatusBadge status={process.status} />
       </div>
 
+      {process.origin === 'planilha_sem_numero' && (
+        <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Lançamento da planilha de acompanhamento sem nº de processo COPPETEC (ex.: DOA, ressarcimento, passagem pela
+          agência) — conta como realizado
+          {process.realized_on ? ` em ${process.realized_on.split('-').reverse().join('/')}` : ''}.
+        </p>
+      )}
       {process.origin === 'drive_import' && (
         <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
           Criado a partir da pasta do drive

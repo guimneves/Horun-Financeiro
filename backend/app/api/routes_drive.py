@@ -31,7 +31,7 @@ from app.schemas.drive import (
     ScanReportOut,
     SyncResultOut,
 )
-from app.services.drive_scan import scan_entries
+from app.services.drive_scan import fold, scan_entries
 from app.services.drive_sync import SyncPlan, apply_sync, plan_sync
 from app.services.ledger import LedgerError, LedgerResult, read_ledger
 
@@ -60,26 +60,59 @@ def _relative_to(folder: str, entries: list[DriveEntry]) -> list[DriveEntry]:
     ]
 
 
+def _pick_ledger(names: list[str]) -> str | None:
+    """Entre as .xlsx da pasta, a de acompanhamento: na pasta real convivem
+    "NOVA ... Acompanhamento de saldo...", "antiga.xlsx", "antiga 2.xlsx" e
+    "Calculo Pessoal.xlsx". Só escolhe quando não há dúvida."""
+    if len(names) <= 1:
+        return names[0] if names else None
+    candidates = [n for n in names if "acompanhamento" in fold(n)] or names
+    current = [n for n in candidates if not any(w in fold(n) for w in ("antig", "backup", "copia", "old"))]
+    return current[0] if len(current) == 1 else None
+
+
+def _find_ledger(entries: list[DriveEntry]) -> str | None:
+    """A planilha de acompanhamento da pasta "0_Saldo por item" (ver
+    `_pick_ledger`) — evita sincronizar sem valores por esquecer o campo
+    (visto na prática: 420 processos entraram com R$ 0). `entries` relativas
+    à pasta do projeto."""
+    by_folder: dict[str, list[str]] = {}
+    for e in entries:
+        parts = e.path.split("/")
+        if e.is_dir or len(parts) != 2 or "saldo por item" not in fold(parts[0]):
+            continue
+        if parts[1].lower().endswith(".xlsx") and not parts[1].startswith("~$"):
+            by_folder.setdefault(parts[0], []).append(parts[1])
+    for folder, sheets in sorted(by_folder.items()):
+        chosen = _pick_ledger(sorted(sheets))
+        if chosen:
+            return f"{folder}/{chosen}"
+    return None
+
+
 def _build_plan(session: Session, project: Project, body: DriveScanRequest) -> SyncPlan:
     folder = _folder(project)
     backend = get_drive_backend()
-    ledger: LedgerResult | None = None
-    if body.ledger_path:
-        if not body.ledger_path.lower().endswith(".xlsx"):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A planilha de valores precisa ser um .xlsx.")
-        try:
-            ledger = read_ledger(backend.read_bytes(join_rel(folder, body.ledger_path)))
-        except DriveNotFound as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Planilha não encontrada: {body.ledger_path}") from exc
-        except (DriveError, LedgerError) as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     try:
-        entries = backend.list_tree(folder)
+        entries = _relative_to(folder, backend.list_tree(folder))
     except DriveError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except OSError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Não foi possível ler as pastas do drive: {exc}") from exc
-    return plan_sync(session, project, scan_entries(_relative_to(folder, entries)), ledger)
+    ledger: LedgerResult | None = None
+    ledger_path = (body.ledger_path or "").strip() or _find_ledger(entries)
+    if ledger_path:
+        if not ledger_path.lower().endswith(".xlsx"):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A planilha de valores precisa ser um .xlsx.")
+        try:
+            ledger = read_ledger(backend.read_bytes(join_rel(folder, ledger_path)))
+        except DriveNotFound as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Planilha não encontrada: {ledger_path}") from exc
+        except (DriveError, LedgerError) as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    plan = plan_sync(session, project, scan_entries(entries), ledger)
+    plan.ledger_path = ledger_path if ledger else None
+    return plan
 
 
 def _report(plan: SyncPlan) -> ScanReportOut:
@@ -110,6 +143,7 @@ def _report(plan: SyncPlan) -> ScanReportOut:
         duplicate_numbers=plan.scan.duplicate_numbers,
         ledger_skipped=plan.ledger_skipped,
         ledger_unused=plan.ledger_unused,
+        ledger_path=plan.ledger_path,
     )
 
 

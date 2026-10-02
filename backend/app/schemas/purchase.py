@@ -55,6 +55,7 @@ class PurchaseProcessOut(BaseModel):
     completed_at: datetime | None
     closed_at: datetime | None
     realized_on: date | None = None
+    ledger_ref: str | None = None
     # Nota fiscal acima do saldo, confirmada depois do aviso (sinal na lista).
     over_balance_confirmed_by: str | None = None
     over_balance_confirmed_at: datetime | None = None
