@@ -104,7 +104,7 @@ export function ProjectListPage() {
   if (projects === null) return <p className="p-6">Carregando…</p>
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
           Projetos

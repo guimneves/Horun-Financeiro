@@ -55,12 +55,12 @@ export function BudgetRevisionsPage() {
   if (revisions === null) return <p className="p-6">Carregando…</p>
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 md:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           Revisões orçamentárias
         </h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setShowImport(true)}

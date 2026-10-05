@@ -124,7 +124,7 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. **202 testes** do backend passam; frontend compila e
+- **`master`**: estável. **214 testes** do backend passam; frontend compila e
   passa no lint. Além do que já havia (paridade, leitura de pastas no modo local,
   redação de valores, política de saldo...), tem desde 02/10: importação do
   orçamento e da Equipe Executora a partir da planilha, leitor de PDF na página,
@@ -315,7 +315,7 @@ sem documentos de projeto; sem câmbio; concorrência sem controle; sem paginaç
 1. `git clone https://github.com/guimneves/Horun-Financeiro` e
    `git switch wip/drive-agent` (para continuar o modo agente) ou fique em `master`.
 2. Ler, nesta ordem: `CLAUDE.md`, este arquivo, `CHANGELOG.md`, `AGENT_CONTRACT.md`.
-3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **202 passed**
+3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **214 passed**
    (`wip/drive-agent`: 223).
 4. As memórias da sessão original ficam fora do repositório (no perfil do
    Claude Code da conta antiga); o essencial delas está na seção 1 e 6 acima.

@@ -31,7 +31,7 @@ export function ProjectLayout() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="border-b px-6 py-3" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="border-b px-4 py-3 md:px-6" style={{ borderColor: 'var(--color-border)' }}>
         <div className="font-semibold" style={{ color: 'var(--color-text)' }}>
           {project.name}
         </div>

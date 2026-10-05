@@ -81,11 +81,11 @@ export function BudgetItemsPage() {
   if (categories === null || revisions === null) return <p className="p-6">Carregando…</p>
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {isCoordenador && draftRevision && draftItems !== null && (
         <div className="mb-6">
           <div
-            className="mb-4 flex items-center justify-between rounded-lg border px-4 py-3"
+            className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
           >
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>

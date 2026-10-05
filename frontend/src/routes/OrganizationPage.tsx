@@ -33,7 +33,7 @@ export function OrganizationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md p-6">
+    <div className="mx-auto max-w-md p-4 md:p-6">
       <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
         Organização interna
       </h2>

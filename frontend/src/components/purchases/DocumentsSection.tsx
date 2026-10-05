@@ -90,13 +90,13 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
         const canUploadThisType = UPLOADABLE_TYPES.includes(docType)
         return (
           <div key={docType} className="mb-4">
-            <div className="mb-1 flex items-center justify-between">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2">
               <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                 {DOC_TYPE_LABELS[docType] ?? docType}
                 {isQuote && <span style={{ color: 'var(--color-text-muted)' }}> ({items.length}/3)</span>}
               </span>
               {canUpload && canUploadThisType && !atQuoteLimit && (
-                <label className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
+                <label className="inline-flex min-h-10 cursor-pointer items-center text-xs font-medium md:min-h-0" style={{ color: 'var(--color-primary)' }}>
                   {uploadingType === docType ? 'Enviando…' : '+ Anexar arquivo'}
                   <input
                     ref={(el) => {
@@ -120,7 +120,7 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
             ) : (
               <ul className="space-y-1">
                 {items.map((doc) => (
-                  <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">
+                  <li key={doc.id} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                     <span className="min-w-0 truncate">
                       {previewKind(doc.original_filename) ? (
                         <button
@@ -147,10 +147,10 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                         </span>
                       )}
                     </span>
-                    <span className="flex shrink-0 items-center gap-2">
+                    <span className="flex items-center gap-2 sm:shrink-0">
                       <a
                         href={purchasesApi.downloadUrl(projectId, processId, doc.id)}
-                        className="text-xs"
+                        className="inline-flex min-h-10 items-center text-xs md:min-h-0"
                         style={{ color: 'var(--color-text-muted)' }}
                         title="Baixar"
                       >
@@ -158,7 +158,7 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                       </a>
                       <select
                         aria-label="Tipo do documento"
-                        className="rounded border px-1 py-0.5 text-xs"
+                        className="min-w-0 flex-1 rounded border px-1 py-0.5 text-xs sm:flex-none"
                         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text-muted)' }}
                         value={doc.doc_type}
                         onChange={(e) => handleReclassify(doc.id, e.target.value)}

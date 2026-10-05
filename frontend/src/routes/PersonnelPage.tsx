@@ -6,6 +6,7 @@ import { NewAssignmentModal } from '../components/personnel/NewAssignmentModal'
 import { AssignmentRow } from '../components/personnel/AssignmentRow'
 import type { ProjectContext } from './ProjectLayout'
 import { PersonnelImportPanel } from '../components/personnel/PersonnelImportPanel'
+import { useIsMobile } from '../lib/useIsMobile'
 
 export function PersonnelPage() {
   const { project } = useOutletContext<ProjectContext>()
@@ -13,6 +14,7 @@ export function PersonnelPage() {
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const isMobile = useIsMobile()
 
   const load = useCallback(() => {
     personnelApi
@@ -31,13 +33,13 @@ export function PersonnelPage() {
   const isCoordenador = project.my_role === 'coordenador'
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 md:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           Equipe Executora
         </h2>
         {isCoordenador && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setShowImport(true)}
@@ -64,6 +66,19 @@ export function PersonnelPage() {
 
       {assignments.length === 0 ? (
         <p style={{ color: 'var(--color-text-muted)' }}>Nenhuma atribuição de pessoal cadastrada.</p>
+      ) : isMobile ? (
+        <div className="space-y-2">
+          {assignments.map((assignment) => (
+            <AssignmentRow
+              key={assignment.id}
+              projectId={project.id}
+              assignment={assignment}
+              isCoordenador={isCoordenador}
+              onChanged={load}
+              variant="card"
+            />
+          ))}
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
           <table className="w-full text-sm">

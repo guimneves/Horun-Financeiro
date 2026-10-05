@@ -49,7 +49,7 @@ export function FilePreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0, 0, 0, 0.55)' }}
       onClick={onClose}
       role="dialog"
@@ -57,11 +57,11 @@ export function FilePreviewModal({
       aria-label={`Visualizar ${filename}`}
     >
       <div
-        className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border"
+        className="flex h-full w-full max-w-5xl flex-col overflow-hidden border sm:rounded-lg"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b px-4 py-2" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-3 py-2 sm:px-4" style={{ borderColor: 'var(--color-border)' }}>
           <span className="min-w-0 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }} title={filename}>
             {filename}
           </span>
@@ -72,7 +72,7 @@ export function FilePreviewModal({
             <a href={downloadUrl} style={{ color: 'var(--color-primary)' }}>
               Baixar
             </a>
-            <button type="button" onClick={onClose} aria-label="Fechar" style={{ color: 'var(--color-text-muted)' }}>
+            <button type="button" onClick={onClose} aria-label="Fechar" className="px-2" style={{ color: 'var(--color-text-muted)' }}>
               ✕
             </button>
           </span>
