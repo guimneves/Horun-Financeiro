@@ -10,7 +10,7 @@ Duas branches carregam este trabalho:
 | Branch | O que tem | Testes |
 |---|---|---|
 | `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 202 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
-| `wip/drive-agent` | `master` + o trabalho **em andamento** do modo agente (ver "Em andamento"). **A suíte não importa** nesta branch até terminar a religação das rotas. | — |
+| `wip/drive-agent` | `master` + o modo agente do drive (pronto nos testes; falta o ambiente real). Recebe merge da `master` a cada mudança. | 223 testes do backend passam |
 
 ---
 
@@ -38,7 +38,7 @@ despesa agora é igual ao da coluna "Valor Realizado" da aba Saldo por Item
   realizados no item da coluna "Nº do Item" (`origin = planilha_sem_numero`,
   sem arquivos). Identidade da linha em `ledger_ref` (pelo conteúdo — não
   duplica ao sincronizar de novo); data na coluna do processo vira
-  `realized_on`. Antes eram descartados sem aviso (~R$ 790 mil).
+  `realized_on`. Antes eram descartados sem aviso.
 - **Subitem "1.1"** na coluna "Nº do Item" conta no item 1, com aviso.
 - **Preencher valor**: processo que entrou com R$ 0 (sincronizado sem a
   planilha) recebe o valor da planilha na próxima sincronização.

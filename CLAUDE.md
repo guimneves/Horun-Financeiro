@@ -44,5 +44,5 @@ numa pasta temporária.
 ## Estado
 
 Ver seção 5 de `docs/ESTADO_E_PLANOS.md`. `master` = estável; `wip/drive-agent` =
-modo agente em andamento (a suíte não importa lá até religar as rotas; passos na
-seção 7).
+`master` + modo agente do drive, pronto nos testes (223 passam); recebe merge da
+`master` a cada mudança. Pendências e próximos passos: seções 8 e 9.

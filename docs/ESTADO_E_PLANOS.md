@@ -98,28 +98,46 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
   abas `Quadro Resumo`, `Saldo por Item`, `Equipe Executora` e uma aba de
   lançamentos por categoria. **Layouts das abas de lançamentos diferem** (colunas
   deslocadas pela "Quantidade") — por isso o leitor acha colunas pelo cabeçalho.
-  Há também `antiga.xlsx`, `antiga 2.xlsx`, `Calculo Pessoal.xlsx` (ainda **não
-  analisadas**) e uma folha de pessoal dentro de `Equipe Executora`.
+  Há também `antiga.xlsx`, `antiga 2.xlsx`, `Calculo Pessoal.xlsx` (a
+  sincronização as ignora e usa a de "Acompanhamento") e uma folha de pessoal
+  dentro de `Equipe Executora`.
 - A planilha tem inconsistências próprias (ex.: verificação com `#REF!`, soma
   de grupo que omite uma linha, uma fórmula de saldo que desconta rendimento de
   forma diferente das outras). Servem de argumento para o programa, mas a
   reconciliação deve saber que os números dela podem estar errados.
-- Linhas da planilha com nº de processo inválido existem (ex.: "?", "xxxx", um
-  ID de seguro) — o programa as lista com o valor.
+- Linhas de lançamento **sem nº de processo** (coluna vazia, "?", "x", uma data,
+  um ID de seguro): DOA, ressarcimentos, passagens pela agência, diárias. Entram
+  como "lançamento sem nº" no item da coluna "Nº do Item" (`ledger_ref`).
+- **Não há pasta de Outras Despesas** no drive; em `Passagens`, `Diárias` e
+  `Ajuda de custo` nenhuma subpasta segue o padrão `Item N/processo` — esses
+  gastos vêm só da planilha.
+- **Subitem** "1.1" na coluna "Nº do Item" (Serviços): é uma linha própria do
+  SIGITEC, diferente do item 1 (pendência, seção 8).
+- Itens de Material de Consumo/Serviços com quantidade 1 são **verbas** (várias
+  compras por item).
+- As datas de modificação dos arquivos do drive são todas iguais (a da cópia
+  para o OneDrive) — não servem como data da compra. O nº de processo COPPETEC
+  é sequencial no ano (~13.800/ano) e dá a data aproximada (`services/pace.py`).
+- **Conferência (02/10/2026)**: depois da sincronização, o realizado dos 274
+  itens de despesa é igual ao da coluna "Valor Realizado" da aba Saldo por Item,
+  ao centavo. Equipe Executora difere porque o módulo conta até hoje.
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. 163 testes do backend passam; frontend compila e passa
-  no lint. Tem paridade com a planilha, correção da base, leitura de pastas
-  (modo local) e as correções da revisão de 01/10 (API sob `/api`, drive,
-  valores, upload de pessoal, portas do modo dev), o trabalho de 27–28/09
-  (senha mestra de coordenador, redação de valores, barra lateral, Organização)
-  e o aviso de nota fiscal acima do saldo. Ver CHANGELOG.
-- **`wip/drive-agent`**: master (até 756f2c7, trazida em 2026-10-02) + modo
-  agente do drive **funcionando nos testes**: 182 testes passam, entre eles os
-  mesmos cenários do drive rodando por um agente falso
-  (`tests/test_drive_agent_mode.py`). Falta só o que depende do ambiente real
-  (seção 7).
+- **`master`**: estável. **202 testes** do backend passam; frontend compila e
+  passa no lint. Além do que já havia (paridade, leitura de pastas no modo local,
+  redação de valores, política de saldo...), tem desde 02/10: importação do
+  orçamento e da Equipe Executora a partir da planilha, leitor de PDF na página,
+  aba Resumo com gráficos (indicadores, uso por categoria, ritmo de execução,
+  Quadro Resumo, parcelas, alertas), sincronização que bate com a planilha item a
+  item e Orçamento agrupado por categoria. Ver CHANGELOG.
+- **`wip/drive-agent`**: `master` + modo agente do drive, **pronto nos testes**
+  (**223 passam**, inclusive o drive por um agente falso). Recebe merge da
+  `master` a cada mudança. Falta o ambiente real (seção 7).
+- **Apresentação local**: `Programas/Horun/Apresentar_Financeiro.bat` (fora do
+  repositório) roda a `master` em modo DEV com o drive local e a base em
+  `C:\HorunDemo\Financeiro`. Reabrir o .bat a cada mudança; a planilha precisa
+  estar fechada no Excel para ser lida.
 - Nada disso foi testado em produção; não há deploy.
 
 ## 6. Decisões já tomadas (não reabrir sem motivo)
@@ -131,13 +149,24 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 4. **Ordem do trabalho**: paridade → corrigir a base → leitura de pastas.
 5. **Importação**: o programa lê pastas e a planilha por si só (não um CLI
    externo); começa lendo (plano sem gravar), só grava após confirmação.
-6. **Não importar dados reais ainda** até o orçamento (SIGITEC + reformulações)
-   estar cadastrado.
+6. ~~Não importar dados reais ainda~~ — o orçamento já é importado da
+   planilha; os dados reais ficam só na base local da apresentação (fora do
+   repositório).
 7. **Alembic não adotado**: manter `_ensure_column` como o Horun Core; decidir
    junto com o Core se migra.
 8. **Bifurcação do trabalho do agente**: uma sessão trabalha no Financeiro, outra
    no repositório **Horun Agent**. O contrato entre as duas está em
    [`AGENT_CONTRACT.md`](AGENT_CONTRACT.md).
+9. **Item vem da planilha**, não da pasta (02/10/2026): o "Nº do Item" da
+   planilha corresponde 1 a 1 ao SIGITEC — preservar essa numeração. A pasta só
+   diz quais processos existem; processo já importado no item da pasta passa
+   para o da planilha ao sincronizar (se ninguém mudou à mão).
+10. **Lançamentos sem nº de processo** contam como realizado (como na planilha).
+11. **Data da compra no gráfico de ritmo**: `realized_on` (gravada ao autorizar)
+    ou, nos importados, estimada pelo nº de processo — o painel diz quanto é
+    estimado.
+12. Ordem da apresentação aos supervisores: rodar localmente antes de implantar
+    no Horun.
 
 ## 7. Modo agente — divisão de trabalho e o que falta
 
@@ -199,22 +228,19 @@ mesmo agente pode atender vários módulos no mesmo PC (`servers` no
 
 ## 8. Pendências e decisões em aberto
 
-- **Onde o backend vai rodar** e **em qual máquina o OneDrive está sincronizado**
-  (pergunta feita, ainda sem resposta). Define local × agente.
-- **Cadastrar o orçamento** do projeto (SIGITEC + reformulações 1–3) a partir da
-  planilha ("Saldo por Item") ou pela tela de revisões — **pré-requisito** para a
-  importação real (os processos se ligam aos itens do orçamento).
+- **Subitens** ("1.1", "1.2"...) no orçamento, com previsto e saldo próprios —
+  hoje o gasto do 1.1 cai no item 1 e o previsto dele não é importado (item 1 de
+  Serviços fica negativo). Proposto; aguardando o usuário.
+- **Onde o backend vai rodar** e **em qual máquina o OneDrive está
+  sincronizado** (serão máquinas separadas — ainda sem decisão). Define a porta
+  estreita 8002 e o compose de produção.
 - **Estados dos processos importados** são inferência pelos arquivos; a maioria
-  fica "nota fiscal emitida" (só 2 "concluído"). O saldo fica correto; os estados
-  precisam de conferência. Aceitar assim ou definir outra regra?
-- **12 processos com pasta e sem valor na planilha** entram com valor zero.
-- **Linhas inválidas da planilha** (valor não importado) — decidir caso a caso.
-- Equipe Executora acima do saldo: **não bloqueia** — confirmar. (Nota fiscal acima do
-  saldo: decidido em 01/10 — avisa, pede confirmação e marca o processo.)
+  fica "nota fiscal emitida" (só 2 "concluído"). Aceitar assim ou outra regra?
+- **12 processos com pasta e sem valor na planilha** entram com valor zero
+  (alerta "sem valor" no Resumo).
+- Equipe Executora acima do saldo: **não bloqueia** — confirmar.
 - `MAX_QUOTES_PER_PROCESS = 3` é um **máximo**; se a regra da fundação é um
   **mínimo** de 3 cotações, o modelo está invertido — confirmar.
-- Equipe Executora: importação de pessoal a partir das planilhas/pastas ainda não
-  feita.
 - Alembic × `_ensure_column` (decidir com o Core).
 - ~~Build Docker do frontend sem o design-system~~ — resolvido em 2026-10-02:
   cópia versionada em `frontend/vendor/horun-design-system/` (gerada por
@@ -224,29 +250,33 @@ mesmo agente pode atender vários módulos no mesmo PC (`servers` no
   2026-10-02. As rotas do agente ficam sob `/api` (laço em `main.py`); a porta
   estreita repassa `/agent/...` para `/api/agent/...`, então o `url` do agente
   continua sendo só `http://<servidor>:8002`.
+- ~~Cadastrar o orçamento~~ / ~~importar a Equipe Executora~~ / ~~linhas
+  inválidas da planilha~~ — feitos em 02/10 (importação pela tela e
+  lançamentos sem nº).
 
 ## 9. Plano (ordem sugerida)
 
-1. Modo agente: o código está pronto na `wip/drive-agent`; falta o ambiente
-   (seção 7, "O que falta") e então trazê-la para a `master`.
-2. Cadastrar o orçamento real → rodar "Ler pastas" com a planilha → conferir o
-   plano → sincronizar → corrigir estados na tela.
+1. Subitens no orçamento (se aprovado).
+2. Exportar o Resumo (PDF/Excel) para os supervisores.
 3. **Fluxos por categoria** (hoje há um fluxo único, o de compra): Afastamento do
    País (carta convite, cartão de embarque, hotel, passagem, relatório, seguro),
    Diárias/Ajuda de custo, Serviço, Prestação de contas — cada um com seus
    documentos e estados.
 4. **Documentos de projeto** (Documentos COPPETEC, SEI, reformulações, Comodato):
    hoje documento só se liga a processo de compra ou atribuição de pessoal.
-5. Importação da **Equipe Executora** (pessoal) e comparação com a planilha de cálculo.
-6. Endurecer: concorrência (versão otimista), paginação, fuso de `date.today()`,
+5. Câmbio nos itens importados; coluna "confere" da planilha; comparar revisões.
+6. Terminar o modo agente no ambiente real (seção 7) e
+   Docker/compose de produção com o Core.
+7. Endurecer: concorrência (versão otimista), paginação, fuso de `date.today()`,
    revisão do uso de `MODULE_SECRET_KEY` (hoje sem uso).
-7. Docker/compose de produção e integração com o Core.
 
 ## 10. Ideias discutidas (backlog completo)
 
 Implementadas: ver CHANGELOG. Discutidas e **não** feitas:
 
 - **Fluxos por categoria** e **documentos de projeto** (itens 3–4 acima).
+- **Exportar o Resumo** em PDF/Excel; **coluna "confere"** da planilha;
+  **comparar revisões** do orçamento.
 - **Moeda estrangeira/câmbio** para categorias importadas (hoje só uma nota de
   texto): campos de moeda, valor original, taxa e data.
 - **Ligar tentativas**: pasta "(CANCELADO)" ao irmão com mesmo título
@@ -283,7 +313,8 @@ sem documentos de projeto; sem câmbio; concorrência sem controle; sem paginaç
 1. `git clone https://github.com/guimneves/Horun-Financeiro` e
    `git switch wip/drive-agent` (para continuar o modo agente) ou fique em `master`.
 2. Ler, nesta ordem: `CLAUDE.md`, este arquivo, `CHANGELOG.md`, `AGENT_CONTRACT.md`.
-3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **96 passed**.
+3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **202 passed**
+   (`wip/drive-agent`: 223).
 4. As memórias da sessão original ficam fora do repositório (no perfil do
    Claude Code da conta antiga); o essencial delas está na seção 1 e 6 acima.
 5. Contexto externo: `Programas/Horun Core` (design-system e plataforma),
