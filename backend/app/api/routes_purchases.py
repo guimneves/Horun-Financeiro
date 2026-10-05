@@ -36,6 +36,7 @@ from app.schemas.purchase import (
 )
 from app.services.audit import record_event
 from app.services.balance import brl, check_balance, position_balance
+from app.services.notifications import notify_transition
 from app.services.transitions import TransitionError, apply_transition
 
 router = APIRouter(prefix="/projects/{project_id}/purchase-processes", tags=["purchases"])
@@ -349,6 +350,16 @@ def transition_process(
         )
     except TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    # Aviso pelo Core (sininho + e-mail) — em segundo plano, nunca falha a
+    # requisição. Quem recebe o quê: services/notifications.py.
+    notify_transition(
+        session,
+        updated,
+        action=body.action,
+        actor=identity,
+        reason=body.reason,
+        over_balance=over_balance_warning is not None,
+    )
     return _out(updated, visible=membership.role == "coordenador")
 
 
