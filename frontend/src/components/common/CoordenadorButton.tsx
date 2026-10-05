@@ -12,7 +12,8 @@ export function CoordenadorButton() {
           className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
           style={{ background: '#dcfce7', color: '#15803d' }}
         >
-          <span aria-hidden>🔓</span> Modo coordenador
+          <span aria-hidden>🔓</span> <span className="hidden sm:inline">Modo coordenador</span>
+          <span className="sm:hidden">Coord.</span>
         </span>
         <button
           type="button"
@@ -34,7 +35,8 @@ export function CoordenadorButton() {
         className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium"
         style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
       >
-        <span aria-hidden>🔒</span> Entrar como coordenador
+        <span aria-hidden>🔒</span> <span className="hidden sm:inline">Entrar como coordenador</span>
+        <span className="sm:hidden">Coordenador</span>
       </button>
       {showModal && <CoordenadorLoginModal onClose={() => setShowModal(false)} />}
     </>
@@ -64,7 +66,7 @@ function CoordenadorLoginModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
-        className="w-full max-w-sm rounded-lg border p-5"
+        className="fin-modal-panel w-full max-w-sm rounded-lg border p-5"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
       >
         <div className="mb-1 flex items-center gap-2">

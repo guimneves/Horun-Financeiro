@@ -47,18 +47,18 @@ export function PurchaseProcessDetailPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <Link
         to={`/projects/${project.id}/purchases`}
-        className="mb-3 inline-block text-sm"
+        className="mb-3 inline-flex min-h-10 items-center text-sm md:min-h-0"
         style={{ color: 'var(--color-text-muted)' }}
       >
         ← Voltar para compras
       </Link>
 
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="break-words text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
             {process.title}
           </h2>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -165,7 +165,8 @@ export function PurchaseProcessDetailPage() {
           />
         </div>
 
-        <div>
+        {/* celular: as ações vêm antes dos documentos, sem precisar rolar */}
+        <div className="order-first lg:order-none">
           <ActionPanel
             process={process}
             isCoordenador={project.my_role === 'coordenador'}

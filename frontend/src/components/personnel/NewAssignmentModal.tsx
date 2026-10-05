@@ -54,9 +54,9 @@ export function NewAssignmentModal({ projectId, onClose, onCreated }: NewAssignm
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
       <div
-        className="w-full max-w-md rounded-lg border p-5"
+        className="fin-modal-panel w-full max-w-md rounded-lg border p-4 sm:p-5"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
       >
         <h3 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -123,7 +123,7 @@ export function NewAssignmentModal({ projectId, onClose, onCreated }: NewAssignm
           onChange={(e) => setRoleTitle(e.target.value)}
         />
 
-        <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
               Valor mensal

@@ -14,6 +14,9 @@ services:
       # em 0.0.0.0 entregaria a API inteira, como admin, a qualquer PC da
       # rede do laboratório.
       HORUN_DEV_MODE: "true"
+      # Avisos pelo Horun Core (opcional; vazio = sem avisos) — ver .env.example
+      HORUN_CORE_URL: ${HORUN_CORE_URL:-}
+      HORUN_NOTIFY_TOKEN: ${HORUN_NOTIFY_TOKEN:-}
     ports:
       - "127.0.0.1:8000:8000"
 

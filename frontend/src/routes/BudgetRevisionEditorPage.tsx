@@ -57,7 +57,7 @@ export function BudgetRevisionEditorPage() {
   const editable = isDraft && isCoordenador
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <button
         type="button"
         onClick={() => navigate(`/projects/${project.id}/revisions`)}

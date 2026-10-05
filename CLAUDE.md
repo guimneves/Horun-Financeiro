@@ -34,7 +34,7 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 ## Comandos
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q        # master: 202 passam
+cd backend && .venv/Scripts/python -m pytest -q        # master: 214 passam
 cd frontend && npx tsc -b && npx oxlint
 ```
 

@@ -68,7 +68,7 @@ export function DrivePage() {
 
   if (!status.available) {
     return (
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           Drive do projeto
         </h2>
@@ -96,7 +96,7 @@ export function DrivePage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
         Drive do projeto
       </h2>

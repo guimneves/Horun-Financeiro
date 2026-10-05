@@ -33,8 +33,8 @@ export function PurchaseProcessesPage() {
   const visible = processes.filter((p) => showFinished || !TERMINAL_STATUSES.has(p.status))
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 md:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
           <input type="checkbox" checked={showFinished} onChange={(e) => setShowFinished(e.target.checked)} />
           Mostrar concluídos/cancelados/rejeitados
@@ -58,11 +58,11 @@ export function PurchaseProcessesPage() {
           <Link
             key={process.id}
             to={`/projects/${project.id}/purchases/${process.id}`}
-            className="flex items-center justify-between rounded-lg border p-3 hover:opacity-90"
+            className="flex flex-col gap-2 rounded-lg border p-3 hover:opacity-90 md:flex-row md:items-center md:justify-between"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
           >
-            <div>
-              <div className="font-medium" style={{ color: 'var(--color-text)' }}>
+            <div className="min-w-0">
+              <div className="break-words font-medium" style={{ color: 'var(--color-text)' }}>
                 {process.title}
               </div>
               <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -70,7 +70,7 @@ export function PurchaseProcessesPage() {
                 {process.process_number ? ` · Processo ${process.process_number}` : ''}
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 md:shrink-0 md:gap-4">
               <OverBalanceAlert process={process} />
               <MoneyValue value={process.final_value ?? process.estimated_value} />
               <PurchaseStatusBadge status={process.status} />

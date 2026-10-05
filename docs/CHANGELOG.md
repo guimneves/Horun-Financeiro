@@ -9,10 +9,32 @@ Duas branches carregam este trabalho:
 
 | Branch | O que tem | Testes |
 |---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 202 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
+| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 214 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
 | `wip/drive-agent` | `master` + o modo agente do drive (pronto nos testes; falta o ambiente real). Recebe merge da `master` a cada mudança. | 223 testes do backend passam |
 
 ---
+
+## 05/10/2026 — Aba Manual, interface no celular e avisos pelo Core
+
+- **Aba Manual** (última da barra lateral, para todos): para que serve, quem
+  pode fazer o quê, uma seção por tarefa com os botões em negrito, dúvidas
+  frequentes e quem procurar. Índice com âncoras, busca por texto e
+  **Imprimir / salvar PDF** (`window.print()`, sem barra lateral nem
+  cabeçalho). Conteúdo em `frontend/src/manual/content.tsx` — mudou uma tela,
+  atualize o manual no mesmo commit.
+- **Celular (375 px)**: barra lateral vira gaveta (☰; fecha ao escolher, ao
+  tocar fora e com Esc); Orçamento (categorias e itens), Compras e Equipe em
+  cartões; gráfico por categoria com rótulos curtos; tabelas largas (Quadro
+  resumo, Drive, Revisões, Membros) rolam para o lado; modais na largura toda
+  com rolagem interna; campos com fonte de 16 px e botões com 40 px de altura;
+  no processo, as **Ações** vêm antes dos documentos. Computador igual a antes.
+- **Avisos pelo Horun Core** (sininho + e-mail; `core/notify.py`,
+  `services/notifications.py`): compra enviada para autorização →
+  coordenadores do projeto; autorizada/rejeitada → quem criou o processo; nota
+  fiscal acima do saldo → coordenadores. Sem valores em R$ nos textos; quem fez
+  a ação não é avisado. Liga com `HORUN_CORE_URL` + `HORUN_NOTIFY_TOKEN` (chave
+  gerada em Core → Admin → Módulos → Notificações); sem elas, nada muda.
+  Detalhes no README. 12 testes novos (214 no total).
 
 ## 02/10/2026 — Item da planilha (SIGITEC) e Orçamento por categoria
 

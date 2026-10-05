@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ThemeProvider, ThemeToggle, HorunFooter } from '@horun/design-system'
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { ProjectListPage } from './routes/ProjectListPage'
 import { ProjectLayout } from './routes/ProjectLayout'
 import { DashboardPage } from './routes/DashboardPage'
@@ -15,13 +15,14 @@ import { ProjectMembersPage } from './routes/ProjectMembersPage'
 import { DrivePage } from './routes/DrivePage'
 import { OrganizationPage } from './routes/OrganizationPage'
 import { ProjectSettingsPage } from './routes/ProjectSettingsPage'
+import { ManualPage } from './routes/ManualPage'
 import { CoordenadorProvider, useCoordenadorSession } from './context/CoordenadorContext'
 import { ProjectsProvider, useProjects } from './context/ProjectsContext'
 import { CoordenadorButton } from './components/common/CoordenadorButton'
 import { DevUserSwitcher } from './components/common/DevUserSwitcher'
 import { AppSidebar } from './components/layout/AppSidebar'
 
-function Header() {
+function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { isElevated } = useCoordenadorSession()
   const { reload } = useProjects()
 
@@ -33,11 +34,21 @@ function Header() {
 
   return (
     <header
-      className="flex items-center justify-between border-b px-4 py-3"
+      className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4 md:py-3 print:hidden"
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
     >
-      <div className="flex items-center gap-4">
-        <Link to="/" className="text-lg font-semibold" style={{ color: 'var(--color-primary)' }}>
+      <div className="flex min-w-0 items-center gap-2 md:gap-4">
+        {/* celular: a barra lateral vira gaveta, aberta por este botão */}
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          className="flex h-10 w-10 items-center justify-center rounded-md text-xl md:hidden"
+          style={{ color: 'var(--color-text)' }}
+          aria-label="Abrir menu"
+        >
+          ☰
+        </button>
+        <Link to="/" className="truncate text-lg font-semibold" style={{ color: 'var(--color-primary)' }}>
           Horun · Financeiro
         </Link>
         {isElevated && (
@@ -46,7 +57,7 @@ function Header() {
           </Link>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {import.meta.env.DEV && <DevUserSwitcher />}
         <CoordenadorButton />
         <ThemeToggle />
@@ -55,18 +66,31 @@ function Header() {
   )
 }
 
-export default function App() {
+function Shell() {
+  // Gaveta do celular: fecha ao trocar de página (item escolhido), ao tocar
+  // fora e com Esc. No computador a barra lateral fica sempre visível.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname, location.search])
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menuOpen])
+
   return (
-    <ThemeProvider>
-      <CoordenadorProvider>
-        <ProjectsProvider>
           <div className="flex min-h-screen flex-col">
-            <Header />
+            <Header onOpenMenu={() => setMenuOpen(true)} />
 
-            <div className="flex flex-1">
-              <AppSidebar />
+            <div className="flex min-w-0 flex-1">
+              <AppSidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
 
-              <main className="flex-1 overflow-y-auto">
+              <main className="min-w-0 flex-1 overflow-y-auto">
                 <Routes>
                   <Route path="/" element={<ProjectListPage />} />
                   <Route path="/organizacao" element={<OrganizationPage />} />
@@ -83,12 +107,24 @@ export default function App() {
                     <Route path="drive" element={<DrivePage />} />
                     <Route path="settings" element={<ProjectSettingsPage />} />
                   </Route>
+                  <Route path="/manual" element={<ManualPage />} />
                 </Routes>
               </main>
             </div>
 
-            <HorunFooter moduleName="Horun · Financeiro" />
+            <div className="print:hidden">
+              <HorunFooter moduleName="Horun · Financeiro" />
+            </div>
           </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <CoordenadorProvider>
+        <ProjectsProvider>
+          <Shell />
         </ProjectsProvider>
       </CoordenadorProvider>
     </ThemeProvider>

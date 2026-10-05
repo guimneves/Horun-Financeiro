@@ -53,7 +53,7 @@ export function DevUserSwitcher() {
       </span>
       {!showManual ? (
         <select
-          className="rounded-md border px-2 py-1 text-xs"
+          className="max-w-[9rem] rounded-md border px-2 py-1 text-xs md:max-w-none"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           value={currentValue}
           onChange={(e) => handleChange(e.target.value)}

@@ -182,7 +182,7 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
             <div className="rounded-md p-3 text-sm" style={{ background: '#fef3c7', color: '#92400e' }} role="alert">
               <p className="mb-2 font-medium">Nota fiscal acima do saldo do item</p>
               <p className="mb-3">{overBalanceWarning}</p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setOverBalanceWarning(null)}
@@ -203,7 +203,7 @@ export function ActionPanel({ process, isCoordenador, onTransition }: ActionPane
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setActiveAction(null)}

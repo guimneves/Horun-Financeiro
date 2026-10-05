@@ -23,6 +23,7 @@ import {
 } from '../api/dashboard'
 import { MoneyValue } from '../components/common/MoneyValue'
 import type { ProjectContext } from './ProjectLayout'
+import { useIsMobile } from '../lib/useIsMobile'
 
 // Cores das partes do previsto — fixas por significado, nunca pela posição.
 const PARTS = [
@@ -42,11 +43,11 @@ const fmtPct = (value: string | null) => (value === null ? '—' : pct.format(Nu
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border p-4" style={card}>
+    <div className="min-w-0 rounded-lg border p-3 md:p-4" style={card}>
       <div className="text-xs" style={muted}>
         {label}
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
+      <div className="mt-1 text-xl font-semibold tabular-nums md:text-2xl" style={{ color: 'var(--color-text)' }}>
         {value}
       </div>
       {hint && (
@@ -70,7 +71,7 @@ function KpiRow({ board }: { board: Dashboard }) {
     pace = gap === 0 ? 'no ritmo do prazo' : gap < 0 ? `${-gap} pontos abaixo do ritmo do prazo` : `${gap} pontos acima do ritmo do prazo`
   }
   return (
-    <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Kpi
         label="Orçamento + rendimentos"
         value={available === null ? '100%' : compactBrl.format(available)}
@@ -101,6 +102,10 @@ function Legend() {
 }
 
 function CategoryChart({ categories }: { categories: DashboardCategory[] }) {
+  // celular: rótulos mais curtos para o gráfico caber em 375 px
+  const isMobile = useIsMobile()
+  const labelWidth = isMobile ? 104 : 210
+  const shortLabel = (label: string) => (isMobile && label.length > 16 ? `${label.slice(0, 15)}…` : label)
   // maior previsto primeiro: é onde está o dinheiro
   const rows = [...categories]
     .sort((a, b) => Number(b.planned_value ?? 0) - Number(a.planned_value ?? 0) || a.label.localeCompare(b.label))
@@ -116,7 +121,7 @@ function CategoryChart({ categories }: { categories: DashboardCategory[] }) {
   return (
     <div style={{ width: '100%', height: Math.max(160, rows.length * 36 + 40) }}>
       <ResponsiveContainer>
-        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }} barCategoryGap={8}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: isMobile ? 8 : 16, bottom: 4, left: isMobile ? 0 : 8 }} barCategoryGap={8}>
           <CartesianGrid horizontal={false} stroke="var(--color-border)" />
           <XAxis
             type="number"
@@ -127,7 +132,14 @@ function CategoryChart({ categories }: { categories: DashboardCategory[] }) {
             tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
             stroke="var(--color-border)"
           />
-          <YAxis type="category" dataKey="label" width={210} tick={{ fill: 'var(--color-text)', fontSize: 12 }} stroke="var(--color-border)" />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={labelWidth}
+            tickFormatter={shortLabel}
+            tick={{ fill: 'var(--color-text)', fontSize: isMobile ? 11 : 12 }}
+            stroke="var(--color-border)"
+          />
           <Tooltip
             cursor={{ fill: 'var(--color-surface)' }}
             formatter={(value, name) => [`${value}%`, PARTS.find((p) => p.key === name)?.label ?? name]}
@@ -284,7 +296,8 @@ function SummaryTable({ board, projectId }: { board: Dashboard; projectId: numbe
   const visible = board.values_visible
   return (
     <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-      <table className="w-full text-sm" style={{ color: 'var(--color-text)' }}>
+      {/* celular: largura mínima e rolagem lateral, em vez de espremer a 1ª coluna */}
+      <table className="w-full min-w-[46rem] text-sm" style={{ color: 'var(--color-text)' }}>
         <thead>
           <tr style={{ background: 'var(--color-surface)', ...muted }}>
             <th className="px-3 py-2 text-left font-medium">Elemento de despesa</th>
@@ -395,7 +408,7 @@ function Alerts({ alerts, projectId }: { alerts: DashboardAlert[]; projectId: nu
             <span aria-hidden="true" style={{ color: style.color }}>
               {style.icon}
             </span>
-            <span className="flex-1">{a.message}</span>
+            <span className="min-w-0 flex-1 break-words">{a.message}</span>
             {a.amount !== null && a.kind === 'saldo_negativo' && (
               <span className="tabular-nums font-medium" style={{ color: style.color }}>
                 <MoneyValue value={a.amount} />
@@ -461,10 +474,10 @@ export function DashboardPage() {
 
   const sectionTitle = 'mb-3 text-sm font-semibold uppercase tracking-wide'
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <KpiRow board={board} />
 
-      <section className="mb-6 rounded-lg border p-4" style={card}>
+      <section className="mb-6 rounded-lg border p-3 md:p-4" style={card}>
         <h3 className={sectionTitle} style={muted}>
           Uso do orçamento por categoria
         </h3>
@@ -472,7 +485,7 @@ export function DashboardPage() {
         <CategoryChart categories={board.categories} />
       </section>
 
-      <section className="mb-6 rounded-lg border p-4" style={card}>
+      <section className="mb-6 rounded-lg border p-3 md:p-4" style={card}>
         <h3 className={sectionTitle} style={muted}>
           Ritmo de execução
         </h3>

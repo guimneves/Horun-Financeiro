@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Category, ItemBalance } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
 import { AvailabilityBadge } from '../common/AvailabilityBadge'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 const muted = { color: 'var(--color-text-muted)' }
 const MONEY_FIELDS = ['planned_value', 'yield_amount', 'committed', 'executed', 'balance'] as const
@@ -41,6 +42,66 @@ function UsedBar({ share }: { share: number | null }) {
   )
 }
 
+function QuantityText({ item }: { item: ItemBalance }) {
+  if (item.available_quantity !== null) return <>{`${Number(item.available_quantity)} / ${Number(item.planned_quantity)}`}</>
+  if (item.category === 'equipe_executora') return <>—</>
+  return <span title="Item de quantidade 1 gasto em várias compras: vale o saldo em R$">verba</span>
+}
+
+function BalanceValue({ item }: { item: ItemBalance }) {
+  return item.balance === null ? <AvailabilityBadge hasBalance={item.has_balance} /> : <MoneyValue value={item.balance} signColored />
+}
+
+/** Celular: uma linha da tabela = um cartão (Prompt_Horun_Modulo.md, seção 13). */
+function ItemCard({ item, projectId }: { item: ItemBalance; projectId: number }) {
+  const negativeQty = item.available_quantity !== null && Number(item.available_quantity) < 0
+  const cells: [string, ReactNode][] = [
+    ['Planejado', <MoneyValue value={item.planned_value} />],
+    ['Rendimentos', <MoneyValue value={item.yield_amount} />],
+    ['Comprometido', <MoneyValue value={item.committed} />],
+    ['Realizado', <MoneyValue value={item.executed} />],
+  ]
+  return (
+    <Link
+      to={`/projects/${projectId}/budget/items/${item.position_id}`}
+      className="block rounded-md border p-3"
+      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 break-words text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          <span style={muted}>Nº {item.item_number} · </span>
+          {item.description}
+        </div>
+        <div className="shrink-0 text-sm font-semibold tabular-nums">
+          <BalanceValue item={item} />
+        </div>
+      </div>
+      <dl className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 text-xs min-[360px]:grid-cols-2">
+        {cells.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-2">
+            <dt style={muted}>{label}</dt>
+            <dd className="tabular-nums" style={{ color: 'var(--color-text)' }}>
+              {value}
+            </dd>
+          </div>
+        ))}
+        <div className="flex justify-between gap-2">
+          <dt style={muted}>Qtd. disp.</dt>
+          <dd style={{ color: negativeQty ? '#dc2626' : 'var(--color-text)' }}>
+            <QuantityText item={item} />
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt style={muted}>Usado</dt>
+          <dd>
+            <UsedBar share={usedShare([item])} />
+          </dd>
+        </div>
+      </dl>
+    </Link>
+  )
+}
+
 function ItemRow({ item, projectId }: { item: ItemBalance; projectId: number }) {
   return (
     <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
@@ -56,13 +117,7 @@ function ItemRow({ item, projectId }: { item: ItemBalance; projectId: number }) 
         className="px-3 py-2 text-right"
         style={{ color: item.available_quantity !== null && Number(item.available_quantity) < 0 ? '#dc2626' : 'var(--color-text-muted)' }}
       >
-        {item.available_quantity !== null ? (
-          `${Number(item.available_quantity)} / ${Number(item.planned_quantity)}`
-        ) : item.category === 'equipe_executora' ? (
-          '—'
-        ) : (
-          <span title="Item de quantidade 1 gasto em várias compras: vale o saldo em R$">verba</span>
-        )}
+        <QuantityText item={item} />
       </td>
       <td className="px-3 py-2 text-right">
         <MoneyValue value={item.planned_value} />
@@ -77,7 +132,7 @@ function ItemRow({ item, projectId }: { item: ItemBalance; projectId: number }) 
         <MoneyValue value={item.executed} />
       </td>
       <td className="px-3 py-2 text-right">
-        {item.balance === null ? <AvailabilityBadge hasBalance={item.has_balance} /> : <MoneyValue value={item.balance} signColored />}
+        <BalanceValue item={item} />
       </td>
       <td className="px-3 py-2">
         <UsedBar share={usedShare([item])} />
@@ -111,8 +166,11 @@ export function BudgetItemsTable({
       return next
     })
   const allOpen = groups.length > 0 && groups.every((g) => open.has(g.category.code))
+  const isMobile = useIsMobile()
 
   if (groups.length === 0) return null
+  const negativeCount = (rows: ItemBalance[]) =>
+    rows.filter((i) => (i.balance !== null ? Number(i.balance) < 0 : !i.has_balance)).length
   return (
     <div>
       <div className="mb-2 flex justify-end">
@@ -125,8 +183,60 @@ export function BudgetItemsTable({
           {allOpen ? 'Recolher todas' : 'Expandir todas'}
         </button>
       </div>
+      {isMobile ? (
+        <div className="space-y-2">
+          {groups.map(({ category, items: rows }) => {
+            const isOpen = open.has(category.code)
+            const balance = total(rows, 'balance')
+            const negatives = negativeCount(rows)
+            return (
+              <div
+                key={category.code}
+                className="rounded-lg border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
+              >
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => toggle(category.code)}
+                  className="flex w-full items-start gap-2 p-3 text-left"
+                >
+                  <span aria-hidden="true" className="w-4 shrink-0" style={muted}>
+                    {isOpen ? '▾' : '▸'}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium" style={{ color: 'var(--color-text)' }}>
+                      {category.label}
+                    </span>
+                    <span className="block text-xs" style={muted}>
+                      {rows.length} {rows.length === 1 ? 'item' : 'itens'}
+                      {negatives > 0 && <span style={{ color: '#dc2626' }}> · {negatives} com saldo negativo</span>}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
+                    <span className="block text-xs font-normal" style={muted}>
+                      Saldo
+                    </span>
+                    {balance === null ? <AvailabilityBadge hasBalance={negatives === 0} /> : <MoneyValue value={balance} signColored />}
+                    <span className="mt-1 block">
+                      <UsedBar share={usedShare(rows)} />
+                    </span>
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="space-y-2 border-t p-2" style={{ borderColor: 'var(--color-border)' }}>
+                    {rows.map((item) => (
+                      <ItemCard key={item.position_id} item={item} projectId={projectId} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
       <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-        <table className="w-full text-sm" style={{ color: 'var(--color-text)' }}>
+        <table className="w-full min-w-[56rem] text-sm" style={{ color: 'var(--color-text)' }}>
           <thead>
             <tr style={{ background: 'var(--color-surface)', ...muted }}>
               <th className="px-3 py-2 text-left font-medium">Nº</th>
@@ -146,7 +256,7 @@ export function BudgetItemsTable({
             {groups.map(({ category, items: rows }) => {
               const isOpen = open.has(category.code)
               const balance = total(rows, 'balance')
-              const negatives = rows.filter((i) => (i.balance !== null ? Number(i.balance) < 0 : !i.has_balance)).length
+              const negatives = negativeCount(rows)
               return (
                 <Fragment key={category.code}>
                   <tr
@@ -188,6 +298,7 @@ export function BudgetItemsTable({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

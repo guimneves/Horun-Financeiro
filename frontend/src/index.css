@@ -24,3 +24,39 @@
   --color-primary-hover: #6ee7b7;
   --color-primary-contrast: #04160d;
 }
+
+/* Celular (abaixo de `md`, 768 px) — Prompt_Horun_Modulo.md, seção 13:
+   campos com fonte de 16 px (o iPhone dá zoom em campos menores) e área de
+   toque de pelo menos 40 px em botões e campos. */
+@media (max-width: 767.98px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 40px;
+  }
+  button {
+    min-height: 40px;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Janela (modal) no celular: largura toda, rolagem por dentro. */
+.fin-modal-panel {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+/* Impressão (Manual → "Imprimir / salvar PDF"): só o conteúdo. */
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  main {
+    overflow: visible !important;
+  }
+}
