@@ -51,3 +51,12 @@ class Document(SQLModel, table=True):
     uploaded_by_user_id: str
     uploaded_by_username: str
     uploaded_at: datetime = Field(default_factory=_utcnow)
+    # Cópia de um anexo ("upload") na pasta do processo no drive
+    # (MODULE_DRIVE_WRITE, services/drive_write.py). Caminho relativo à pasta
+    # do PROJETO. Status: "" (não se aplica: escrita desligada, sem pasta ou
+    # anterior ao recurso) | "pendente" (espera o drive/agente) | "copiado" |
+    # "erro" (com o motivo). Pendentes e erros são tentados de novo pela
+    # sincronização automática.
+    drive_copy_path: str | None = None
+    drive_copy_status: str = ""
+    drive_copy_error: str | None = None

@@ -31,14 +31,20 @@ def test_old_database_gets_new_columns_and_keeps_its_data(tmp_path, monkeypatch)
 
     inspector = inspect(engine)
     assert {"drive_folder", "balance_policy"} <= {c["name"] for c in inspector.get_columns("project")}
-    assert {"storage_kind", "sha256"} <= {c["name"] for c in inspector.get_columns("document")}
-    assert {"origin", "drive_rel_path"} <= {c["name"] for c in inspector.get_columns("purchaseprocess")}
+    assert {"storage_kind", "sha256", "drive_copy_path", "drive_copy_status", "drive_copy_error"} <= {
+        c["name"] for c in inspector.get_columns("document")
+    }
+    assert {"origin", "drive_rel_path", "drive_rename_pending"} <= {
+        c["name"] for c in inspector.get_columns("purchaseprocess")
+    }
     assert "uq_process_project_number" in {i["name"] for i in inspector.get_indexes("purchaseprocess")}
 
     with engine.connect() as conn:
         # linhas antigas ganham os valores padrão certos
         assert conn.execute(text("SELECT balance_policy FROM project")).scalar() == "bloquear"
         assert conn.execute(text("SELECT storage_kind FROM document")).scalar() == "upload"
+        assert conn.execute(text("SELECT drive_copy_status FROM document")).scalar() == ""
+        assert not conn.execute(text("SELECT drive_rename_pending FROM purchaseprocess")).scalar()
         assert conn.execute(text("SELECT origin, title FROM purchaseprocess")).one() == ("manual", "Antigo")
 
 

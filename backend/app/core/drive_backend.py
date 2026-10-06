@@ -1,7 +1,11 @@
-"""Acesso de LEITURA ao drive, atrás de uma interface — o resto do módulo
-(leitura de pastas, navegação, download, planilha de valores) não sabe se o
-drive é uma pasta do próprio servidor ou se está num PC distante, alcançado
-pelo Horun Agent. Escolhido por `MODULE_DRIVE_MODE` ("local" | "agent").
+"""Acesso ao drive, atrás de uma interface — o resto do módulo (leitura de
+pastas, navegação, download, planilha de valores, cópia dos anexos) não sabe
+se o drive é uma pasta do próprio servidor ou se está num PC distante,
+alcançado pelo Horun Agent. Escolhido por `MODULE_DRIVE_MODE` ("local" | "agent").
+
+Escrita (só com `MODULE_DRIVE_WRITE=true`, ver services/drive_write.py):
+`write_bytes` só cria arquivo NOVO (nunca sobrescreve) e `move_files` só
+move arquivos para nomes livres. Não há operação de apagar arquivo.
 
 Todos os caminhos são relativos à RAIZ do drive, em posix. A pasta de cada
 projeto é só um prefixo (`Project.drive_folder`), aplicado com `join_rel`.
@@ -17,7 +21,17 @@ from pathlib import Path
 from fastapi import Response
 
 from app.core.config import settings
-from app.core.drive import DriveError, DriveNotFound, drive_root, fs_path, join_rel, safe_join
+from app.core.drive import (
+    DriveError,
+    DriveFileExists,
+    DriveNotFound,
+    DriveReadOnly,
+    DriveUnavailable,
+    drive_root,
+    fs_path,
+    join_rel,
+    safe_join,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +56,21 @@ class DriveBackend(ABC):
         """Caminho no disco do servidor, se o arquivo estiver nele (permite
         servir sem carregar na memória). Nulo para drive remoto."""
         return None
+
+    @abstractmethod
+    def write_bytes(self, path: str, data: bytes) -> None:
+        """Cria um arquivo NOVO (e as pastas que faltarem). `DriveFileExists`
+        se já houver um com esse nome — nunca sobrescreve."""
+
+    @abstractmethod
+    def move_files(self, moves: list[tuple[str, str]]) -> None:
+        """Move arquivos (origem, destino), tudo ou nada; destinos têm que
+        estar livres (`DriveFileExists`); cria as pastas de destino."""
+
+    def remove_empty_dir(self, path: str) -> bool:
+        """Apaga a pasta SE estiver vazia (sobra de uma renomeação). Pelo
+        agente não há como — a pasta vazia fica. Devolve se apagou."""
+        return False
 
 
 class LocalDrive(DriveBackend):
@@ -97,6 +126,56 @@ class LocalDrive(DriveBackend):
         target = fs_path(safe_join(self.root, path))
         return target if os.path.isfile(target) else None
 
+    def write_bytes(self, path: str, data: bytes) -> None:
+        target = fs_path(safe_join(self.root, path))
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            # "x": criação exclusiva — falha se o arquivo já existir
+            with open(target, "xb") as handle:
+                handle.write(data)
+        except FileExistsError as exc:
+            raise DriveFileExists(f"Já existe um arquivo com esse nome no drive: {path}") from exc
+        except OSError as exc:
+            raise DriveError(f"Não foi possível gravar no drive ({path.rsplit('/', 1)[-1]}): {exc}") from exc
+
+    def move_files(self, moves: list[tuple[str, str]]) -> None:
+        planned = [(fs_path(safe_join(self.root, a)), fs_path(safe_join(self.root, b)), b) for a, b in moves]
+        targets: set[str] = set()
+        for src, dst, rel in planned:
+            if not os.path.isfile(src):
+                raise DriveNotFound(f"Arquivo não encontrado no drive: {rel}")
+            key = os.path.normcase(dst)
+            if os.path.exists(dst) or key in targets:
+                raise DriveFileExists(f"Já existe um arquivo com esse nome no drive: {rel}")
+            targets.add(key)
+        done: list[tuple[str, str]] = []
+        try:
+            for src, dst, rel in planned:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if os.path.exists(dst):  # conferido de novo logo antes — nunca sobrescrever
+                    raise DriveFileExists(f"Já existe um arquivo com esse nome no drive: {rel}")
+                os.rename(src, dst)
+                done.append((src, dst))
+        except (OSError, DriveError) as exc:
+            for src, dst in reversed(done):  # tudo ou nada (melhor esforço)
+                try:
+                    os.rename(dst, src)
+                except OSError:
+                    pass
+            if isinstance(exc, DriveError):
+                raise
+            raise DriveError(
+                f"Não foi possível mover os arquivos (algum está aberto em outro programa?): {exc}"
+            ) from exc
+
+    def remove_empty_dir(self, path: str) -> bool:
+        target = fs_path(safe_join(self.root, path))
+        try:
+            os.rmdir(target)  # só apaga pasta vazia; com qualquer coisa dentro, falha
+            return True
+        except OSError:
+            return False
+
 
 AGENT_OFFLINE_MESSAGE = (
     "O agente do drive está offline — confira se o PC com o OneDrive está ligado, "
@@ -104,11 +183,23 @@ AGENT_OFFLINE_MESSAGE = (
 )
 
 
+AGENT_READ_ONLY_MESSAGE = (
+    "A pasta do drive está liberada só para leitura no Horun Agent — mude para read-write "
+    "no config.json para o Financeiro gravar."
+)
+
+
 def _agent_error(exc: Exception) -> DriveError:
     from app.services import agent_bridge
 
     if isinstance(exc, agent_bridge.AgentOfflineError):
-        return DriveError(AGENT_OFFLINE_MESSAGE)
+        return DriveUnavailable(AGENT_OFFLINE_MESSAGE)
+    if isinstance(exc, agent_bridge.AgentTimeoutError):
+        return DriveUnavailable(
+            "O Horun Agent não respondeu a tempo — o PC com o OneDrive pode estar ocupado ou sem rede."
+        )
+    if getattr(exc, "code", None) == "read_only":
+        return DriveReadOnly(AGENT_READ_ONLY_MESSAGE)
     return DriveError(str(exc))
 
 
@@ -139,6 +230,36 @@ class AgentDrive(DriveBackend):
         except agent_bridge.AgentTaskError as exc:
             if agent_bridge.file_not_found(exc):
                 raise DriveNotFound(f"Arquivo não encontrado no drive: {path}") from exc
+            raise _agent_error(exc) from exc
+
+    def write_bytes(self, path: str, data: bytes) -> None:
+        from app.services import agent_bridge
+
+        # O agente SOBRESCREVE em silêncio: confere antes se o nome está livre.
+        target = join_rel("", path)
+        parent, _, name = target.rpartition("/")
+        try:
+            existing = {e.path.rsplit("/", 1)[-1].casefold() for e in self.list_tree(parent, recursive=False)}
+        except DriveNotFound:
+            existing = set()  # a pasta ainda não existe: o agente a cria
+        if name.casefold() in existing:
+            raise DriveFileExists(f"Já existe um arquivo com esse nome no drive: {path}")
+        try:
+            agent_bridge.write_bytes(self.root_name, target, data)
+        except agent_bridge.AgentTaskError as exc:
+            raise _agent_error(exc) from exc
+
+    def move_files(self, moves: list[tuple[str, str]]) -> None:
+        from app.services import agent_bridge
+
+        payload = [{"from": join_rel("", a), "to": join_rel("", b)} for a, b in moves]
+        try:
+            agent_bridge.move_files(self.root_name, payload)
+        except agent_bridge.AgentTaskError as exc:
+            if agent_bridge.file_not_found(exc):
+                raise DriveNotFound(str(exc)) from exc
+            if "já existe" in str(exc):
+                raise DriveFileExists(str(exc)) from exc
             raise _agent_error(exc) from exc
 
 

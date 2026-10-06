@@ -51,9 +51,28 @@ class Settings:
     agent_chunk_bytes: int = int(os.environ.get("MODULE_AGENT_CHUNK_MB", "4")) * 1024 * 1024
     # Maior arquivo que o backend aceita buscar pelo agente (planilha, PDF).
     agent_max_file_bytes: int = int(os.environ.get("MODULE_AGENT_MAX_FILE_MB", "50")) * 1024 * 1024
+    # Gravar no drive (decisão de 06/10/2026): com "true", os documentos
+    # anexados no módulo são copiados para a pasta do processo no drive e a
+    # pasta "SEM NUMERO ..." passa a ter o nº quando ele é informado. Nunca
+    # sobrescreve nem apaga. Padrão DESLIGADO: quem não ligar continua só
+    # lendo (ex. a apresentação local, que aponta para o OneDrive real). No
+    # modo agente, a pasta também precisa estar "read-write" no config.json
+    # do Horun Agent.
+    drive_write: bool = os.environ.get("MODULE_DRIVE_WRITE", "false").strip().lower() in ("1", "true", "yes", "sim")
+    # Sincronização automática com o drive, nos dois sentidos, a cada N
+    # minutos (services/drive_auto_sync.py). 0 = desligada.
+    drive_auto_sync_minutes: int = int(os.environ.get("MODULE_DRIVE_AUTO_SYNC_MINUTES", "30"))
+    # De quanto em quanto tempo o laço confere se está na hora (só uma
+    # consulta ao banco; a sincronização em si segue o intervalo acima).
+    drive_auto_sync_check_seconds: float = float(os.environ.get("MODULE_DRIVE_AUTO_SYNC_CHECK_SECONDS", "60"))
 
 
 settings = Settings()
+
+
+def drive_configured() -> bool:
+    """O drive está ligado neste servidor (pasta local ou Horun Agent)?"""
+    return settings.drive_mode == "agent" or bool(settings.drive_root)
 
 MIN_SECRET_KEY_LENGTH = 32
 

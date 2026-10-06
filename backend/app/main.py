@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -25,7 +26,8 @@ from app.api import (
 from app.core.config import check_production_settings
 from app.core.identity import DEV_MODE
 from app.core.known_users_middleware import KnownUsersMiddleware
-from app.db.session import create_db_and_tables
+from app.db.session import create_db_and_tables, engine
+from app.services import drive_auto_sync
 
 
 @asynccontextmanager
@@ -37,7 +39,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
     check_production_settings(DEV_MODE)
     create_db_and_tables()
-    yield
+    # Sincronização automática com o drive (services/drive_auto_sync.py)
+    task = asyncio.create_task(drive_auto_sync.loop(engine)) if drive_auto_sync.enabled() else None
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
 
 
 app = FastAPI(title="Horun · Financeiro", version="0.1.0", lifespan=lifespan)

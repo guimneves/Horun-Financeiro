@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -34,7 +34,17 @@ from app.schemas.purchase import (
     TransitionRequest,
 )
 from app.services.audit import record_event
+from app.services.af_number import AF_DOC_TYPE, apply_af_number, extract_af_number
 from app.services.balance import brl, check_balance, position_balance
+from app.services.drive_write import (
+    COPY_DONE,
+    COPY_PENDING,
+    copy_document_task,
+    drive_write_enabled,
+    mark_rename_if_needed,
+    rename_process_folder_task,
+    unlink_paths,
+)
 from app.services.notifications import notify_transition
 from app.services.transitions import TransitionError, apply_transition
 
@@ -244,6 +254,7 @@ def update_process(
     project_id: int,
     process_id: int,
     body: PurchaseProcessUpdate,
+    background: BackgroundTasks,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
     membership: ProjectMembership = Depends(get_membership),
@@ -297,6 +308,8 @@ def update_process(
         setattr(process, field, value)
     if "quantity" in data or "estimated_unit_value" in data:
         process.estimated_value = round_money(process.quantity * process.estimated_unit_value)
+    # ganhou o nº: a pasta "SEM NUMERO ..." no drive passa a ter o nº (em segundo plano)
+    rename = "process_number" in changes and mark_rename_if_needed(process)
     session.add(process)
     if changes:
         record_event(
@@ -310,6 +323,8 @@ def update_process(
         )
     _commit_or_conflict(session)
     session.refresh(process)
+    if rename:
+        background.add_task(rename_process_folder_task, process.id)
     return _out(process, warnings, visible=membership.role == "coordenador")
 
 
@@ -318,6 +333,7 @@ def transition_process(
     project_id: int,
     process_id: int,
     body: TransitionRequest,
+    background: BackgroundTasks,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
     membership: ProjectMembership = Depends(get_membership),
@@ -349,6 +365,11 @@ def transition_process(
         )
     except TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if body.process_number is not None and mark_rename_if_needed(updated):
+        session.add(updated)
+        session.commit()
+        session.refresh(updated)
+        background.add_task(rename_process_folder_task, updated.id)
     # Aviso pelo Core (sininho + e-mail) — em segundo plano, nunca falha a
     # requisição. Quem recebe o quê: services/notifications.py.
     notify_transition(
@@ -374,6 +395,9 @@ def _doc_out(doc: Document) -> DocumentOut:
         note=doc.note,
         uploaded_by_username=doc.uploaded_by_username,
         uploaded_at=doc.uploaded_at,
+        drive_copy_status=doc.drive_copy_status or "",
+        drive_copy_error=doc.drive_copy_error,
+        drive_copy_path=doc.drive_copy_path,
     )
 
 
@@ -393,6 +417,7 @@ def list_documents(
 async def upload_document(
     project_id: int,
     process_id: int,
+    background: BackgroundTasks,
     doc_type: str = Form(...),
     note: str | None = Form(None),
     file: UploadFile = File(...),
@@ -431,6 +456,12 @@ async def upload_document(
         uploaded_by_user_id=identity.user_id,
         uploaded_by_username=identity.username,
     )
+    # Cópia na pasta do processo no drive (MODULE_DRIVE_WRITE): depois da
+    # resposta, para o envio não esperar o agente — services/drive_write.py.
+    project = session.get(Project, project_id)
+    copy_to_drive = drive_write_enabled() and bool(project and project.drive_folder)
+    if copy_to_drive:
+        document.drive_copy_status = COPY_PENDING
     session.add(document)
     session.flush()
     record_event(
@@ -442,9 +473,22 @@ async def upload_document(
         actor=identity,
         detail={"documento_id": document.id, "tipo": doc_type, "arquivo": document.original_filename, "sha256": sha256},
     )
+    # AF da COPPETEC: o nº do processo vem impresso nela (services/af_number.py)
+    af_warning = None
+    if doc_type == AF_DOC_TYPE:
+        af_warning = apply_af_number(
+            session, process, extract_af_number(content), filename=document.original_filename, actor=identity
+        )
+    rename = process.drive_rename_pending
     session.commit()
     session.refresh(document)
-    return _doc_out(document)
+    if rename:  # antes da cópia: o anexo já vai para a pasta com o nº
+        background.add_task(rename_process_folder_task, process_id)
+    if copy_to_drive:
+        background.add_task(copy_document_task, document.id)
+    out = _doc_out(document)
+    out.warning = af_warning
+    return out
 
 
 @router.patch("/{process_id}/documents/{doc_id}", response_model=DocumentOut)
@@ -527,9 +571,15 @@ def delete_document(
             status.HTTP_403_FORBIDDEN, "Só quem enviou o documento ou o coordenador pode removê-lo."
         )
     # Documento do drive: só desfaz o vínculo — o arquivo é do drive e nunca é
-    # apagado por este módulo.
+    # apagado por este módulo. Nem a cópia de um anexo no drive: o arquivo
+    # fica lá, e a sincronização não o vincula de novo (DriveUnlinkedPath).
     if doc.storage_kind == "upload":
         delete_file(doc.storage_path)
+    stays_in_drive = doc.storage_path if doc.storage_kind == "drive" else (
+        doc.drive_copy_path if doc.drive_copy_status == COPY_DONE else None
+    )
+    if stays_in_drive:
+        unlink_paths(session, project_id, [stays_in_drive], identity.username)
     record_event(
         session,
         project_id=project_id,

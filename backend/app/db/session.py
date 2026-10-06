@@ -31,6 +31,7 @@ from app.db.models import funding as _funding_models  # noqa: F401
 from app.db.models import module_settings as _module_settings_models  # noqa: F401
 from app.db.models import known_user as _known_user_models  # noqa: F401
 from app.db.models import agent as _agent_models  # noqa: F401
+from app.db.models import drive_state as _drive_state_models  # noqa: F401
 from app.agent_server.models import MIGRATIONS as AGENT_MIGRATIONS
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,11 @@ def _run_migrations() -> None:
     _ensure_column("purchaseprocess", "over_balance_confirmed_at", "TIMESTAMP")
     _ensure_column("purchaseprocess", "realized_on", "DATE")
     _ensure_column("purchaseprocess", "ledger_ref", "VARCHAR")
+    # sincronização com o drive nos dois sentidos (06/10/2026)
+    _ensure_column("document", "drive_copy_path", "VARCHAR")
+    _ensure_column("document", "drive_copy_status", "VARCHAR DEFAULT ''")
+    _ensure_column("document", "drive_copy_error", "VARCHAR")
+    _ensure_column("purchaseprocess", "drive_rename_pending", "BOOLEAN DEFAULT FALSE")
     # colunas novas das tabelas do agente (pacote único — ver app/agent_server)
     for table, column, ddl_type in AGENT_MIGRATIONS:
         _ensure_column(table, column, ddl_type)

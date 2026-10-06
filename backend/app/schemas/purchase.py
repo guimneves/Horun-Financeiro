@@ -102,3 +102,10 @@ class DocumentOut(BaseModel):
     note: str | None
     uploaded_by_username: str
     uploaded_at: datetime
+    # cópia do anexo na pasta do processo no drive: "" (não se aplica) |
+    # pendente | copiado | erro (motivo em drive_copy_error)
+    drive_copy_status: str = ""
+    drive_copy_error: str | None = None
+    drive_copy_path: str | None = None
+    # só na resposta do envio: aviso sobre o nº lido da autorização de fornecimento
+    warning: str | None = None

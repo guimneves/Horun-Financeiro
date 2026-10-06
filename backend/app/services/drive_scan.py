@@ -1,6 +1,5 @@
-"""Leitura da estrutura de pastas do projeto no drive — SOMENTE leitura, e só
-nomes e tamanhos (não abre o conteúdo dos arquivos: no OneDrive isso baixaria
-cada PDF).
+"""Leitura da estrutura de pastas do projeto no drive — só nomes e tamanhos
+(não abre o conteúdo dos arquivos: no OneDrive isso baixaria cada PDF).
 
 Estrutura esperada (a que o laboratório já usa):
 
@@ -9,6 +8,9 @@ Estrutura esperada (a que o laboratório já usa):
       Item <N> - <descrição>/         ex. "Item 14 - Colunas cromatográficas"
         <AAAA>[ -_]<NNNN> <título>/   ex. "2024-10098 Tubo inox"
           arquivos (PDF...)           pasta marcada "(CANCELADO)" = tentativa cancelada
+        SEM NUMERO <dd-mm-aaaa> <título>/   processo ainda sem nº COPPETEC (criada
+                                      pelo módulo ao copiar um anexo; ganha o nº
+                                      quando ele é informado — services/drive_write.py)
 
 O que não segue esse padrão (viagens, reformulações, diárias por pessoa...) não
 é forçado a virar processo: vai para `unrecognized`, com o motivo, para a
@@ -53,8 +55,36 @@ CATEGORY_FOLDERS: dict[str, str] = {
 }
 PERSONNEL_FOLDERS = {"equipe executora"}
 
+# Nome com que o módulo CRIA a pasta de uma categoria que ainda não existe no
+# projeto — os mesmos da pasta real (só usados se não houver uma pasta que
+# já corresponda à categoria por `CATEGORY_FOLDERS`).
+CATEGORY_FOLDER_NAMES: dict[str, str] = {
+    "material_consumo_nacional": "Material de consumo - Nacional",
+    "material_consumo_importado": "Material de consumo - Importado",
+    "equip_nacional": "Equipamento e Material Permanente - Nacional",
+    "equip_importado": "Equipamento e Material Permanente - Importado",
+    "servicos_terceiros": "Serviço",
+    "obras_instalacoes": "Obras e Instalações",
+    "outros_bens_direitos": "Outros bens e direitos",
+    "prototipo_nacional": "Protótipo ou Unidade Piloto - Nacional",
+    "prototipo_importado": "Protótipo ou Unidade Piloto - Importado",
+    "passagens": "Passagens",
+    "diarias": "Diárias",
+    "outras_despesas": "Outras Despesas",
+}
+
 _ITEM_RE = re.compile(r"^Item\s+0*(\d+)\s*[-–—]\s*(.*)$", re.IGNORECASE)
 _PROCESS_RE = re.compile(r"^(\d{4})[\s\-_]+(\d+)(.*)$")
+# Processo sem nº ainda: "SEM NUMERO 06-10-2026 Tubo inox" (data opcional).
+_UNNUMBERED_RE = re.compile(
+    r"^sem[\s_]+n[uú]mero\b[\s\-_]*(?:(\d{1,2})[-._](\d{1,2})[-._](\d{4}))?(.*)$", re.IGNORECASE
+)
+UNNUMBERED_PREFIX = "SEM NUMERO"
+
+
+def is_unnumbered_folder(name: str) -> bool:
+    """A pasta é de um processo ainda sem nº ("SEM NUMERO ...")?"""
+    return _UNNUMBERED_RE.match(name) is not None
 _CANCELLED_RE = re.compile(r"[\(\[]?\s*\bcancelad[oa]\b\s*[\)\]]?", re.IGNORECASE)
 _IGNORED_FILES = {"thumbs.db", "desktop.ini", ".ds_store"}
 
@@ -107,7 +137,7 @@ class ScannedProcess:
     item_number: int
     item_folder: str  # rel_path da pasta do item
     folder: str  # rel_path da pasta do processo
-    process_number: str  # normalizado "AAAA-N"
+    process_number: str  # normalizado "AAAA-N"; "" numa pasta "SEM NUMERO"
     title: str
     cancelled: bool
     inferred_status: str
@@ -268,6 +298,26 @@ def scan_entries(entries: Iterable[Entry]) -> ScanResult:
                 process_rel = f"{item_rel}/{process_node.name}"
                 if not process_node.is_dir:
                     result.loose_files += 1
+                    continue
+                unnumbered = _UNNUMBERED_RE.match(process_node.name)
+                if unnumbered is not None:
+                    rest = unnumbered.group(4)
+                    cancelled = bool(_CANCELLED_RE.search(rest))
+                    title = _CANCELLED_RE.sub("", rest).strip(" -–—_.")
+                    files = _scan_process_folder(process_node, process_rel)
+                    result.processes.append(
+                        ScannedProcess(
+                            category=category,
+                            item_number=item_number,
+                            item_folder=item_rel,
+                            folder=process_rel,
+                            process_number="",
+                            title=title or item_match.group(2).strip() or "(sem título)",
+                            cancelled=cancelled,
+                            inferred_status=_infer_status(cancelled, files),
+                            files=files,
+                        )
+                    )
                     continue
                 process_match = _PROCESS_RE.match(process_node.name)
                 if process_match is None:

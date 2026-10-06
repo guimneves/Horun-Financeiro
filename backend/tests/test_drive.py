@@ -234,9 +234,10 @@ def test_drive_documents_download_but_are_never_deleted_from_disk(client, drive)
     afile = drive / "Material de consumo - Nacional" / "Item 1 - Tubos e conexões" / "2024-1001 Tubo inox" / "autorizacao_de_fornecimento_1.pdf"
     assert afile.exists()  # o arquivo do drive continua lá
 
-    # e uma nova sincronização o vincula de novo
+    # e a sincronização (inclusive a automática) não o vincula de novo: quem
+    # desvinculou decidiu (DriveUnlinkedPath, desde 06/10/2026)
     again = client.post(f"/projects/{project['id']}/drive/sync", json=LEDGER, headers=ADMIN).json()
-    assert again["arquivos_vinculados"] == 1
+    assert again["arquivos_vinculados"] == 0
 
 
 def test_reclassify_document_even_in_closed_process(client, drive):

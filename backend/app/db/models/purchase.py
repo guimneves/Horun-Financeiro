@@ -68,6 +68,10 @@ class PurchaseProcess(SQLModel, table=True):
     cancel_reason: str | None = None
     origin: str = "manual"  # manual | drive_import (criado a partir da pasta do drive)
     drive_rel_path: str | None = None  # pasta deste processo no drive, relativa à pasta do projeto
+    # A pasta "SEM NUMERO ..." precisa passar a ter o nº (que acabou de ser
+    # informado), mas o drive não respondeu — a sincronização automática
+    # tenta de novo (services/drive_write.py `rename_process_folder`).
+    drive_rename_pending: bool = False
     created_by_user_id: str
     created_by_username: str
     created_at: datetime = Field(default_factory=_utcnow)

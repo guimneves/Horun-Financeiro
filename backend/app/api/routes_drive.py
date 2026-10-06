@@ -1,6 +1,8 @@
 """Drive do Financeiro: ler as pastas do projeto (plano, sem gravar),
 sincronizá-las com o banco e consultar/baixar os arquivos pelo programa.
-Tudo aqui é leitura do drive — o módulo nunca escreve nem apaga nada nele.
+Tudo aqui é leitura do drive. A escrita (cópia dos anexos, pasta "SEM
+NUMERO" que ganha o nº) fica em services/drive_write.py; a sincronização
+automática, em services/drive_auto_sync.py.
 
 O drive pode estar no disco deste servidor ou num PC distante, alcançado
 pelo Horun Agent (`MODULE_DRIVE_MODE`) — estas rotas não sabem qual:
@@ -12,7 +14,7 @@ from __future__ import annotations
 
 import mimetypes
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.core.config import settings
@@ -23,6 +25,7 @@ from app.core.permissions import get_membership, require_coordenador
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
 from app.schemas.drive import (
+    AutoSyncOut,
     DriveBrowseOut,
     DriveEntryOut,
     DriveScanRequest,
@@ -31,8 +34,10 @@ from app.schemas.drive import (
     ScanReportOut,
     SyncResultOut,
 )
+from app.services.af_number import fill_numbers_task
 from app.services.drive_scan import fold, scan_entries
-from app.services.drive_sync import SyncPlan, apply_sync, plan_sync
+from app.services.drive_write import drive_write_enabled
+from app.services.drive_sync import SyncPlan, apply_sync, plan_sync, sync_lock
 from app.services.ledger import LedgerError, LedgerResult, read_ledger
 
 router = APIRouter(prefix="/projects/{project_id}/drive", tags=["drive"])
@@ -90,29 +95,49 @@ def _find_ledger(entries: list[DriveEntry]) -> str | None:
     return None
 
 
-def _build_plan(session: Session, project: Project, body: DriveScanRequest) -> SyncPlan:
-    folder = _folder(project)
+class PlanError(Exception):
+    """Não deu para montar o plano. `status_code`: 409 (drive) | 422 (planilha)."""
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def build_sync_plan(session: Session, project: Project, ledger_path: str | None) -> SyncPlan:
+    """Lê as pastas (e a planilha) e calcula o plano — usado pelo botão e
+    pela sincronização automática. `PlanError` se o drive ou a planilha falhar."""
+    try:
+        folder = project_folder(project.drive_folder)
+    except DriveError as exc:
+        raise PlanError(str(exc), status.HTTP_409_CONFLICT) from exc
     backend = get_drive_backend()
     try:
         entries = _relative_to(folder, backend.list_tree(folder))
     except DriveError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        raise PlanError(str(exc), status.HTTP_409_CONFLICT) from exc
     except OSError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"Não foi possível ler as pastas do drive: {exc}") from exc
+        raise PlanError(f"Não foi possível ler as pastas do drive: {exc}", status.HTTP_409_CONFLICT) from exc
     ledger: LedgerResult | None = None
-    ledger_path = (body.ledger_path or "").strip() or _find_ledger(entries)
+    ledger_path = (ledger_path or "").strip() or _find_ledger(entries)
     if ledger_path:
         if not ledger_path.lower().endswith(".xlsx"):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A planilha de valores precisa ser um .xlsx.")
+            raise PlanError("A planilha de valores precisa ser um .xlsx.", status.HTTP_422_UNPROCESSABLE_CONTENT)
         try:
             ledger = read_ledger(backend.read_bytes(join_rel(folder, ledger_path)))
         except DriveNotFound as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Planilha não encontrada: {ledger_path}") from exc
+            raise PlanError(f"Planilha não encontrada: {ledger_path}", status.HTTP_422_UNPROCESSABLE_CONTENT) from exc
         except (DriveError, LedgerError) as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+            raise PlanError(str(exc), status.HTTP_422_UNPROCESSABLE_CONTENT) from exc
     plan = plan_sync(session, project, scan_entries(entries), ledger)
     plan.ledger_path = ledger_path if ledger else None
     return plan
+
+
+def _build_plan(session: Session, project: Project, body: DriveScanRequest) -> SyncPlan:
+    try:
+        return build_sync_plan(session, project, body.ledger_path)
+    except PlanError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
 
 
 def _report(plan: SyncPlan) -> ScanReportOut:
@@ -147,6 +172,12 @@ def _report(plan: SyncPlan) -> ScanReportOut:
     )
 
 
+def _auto_sync_info(session: Session, project_id: int) -> AutoSyncOut:
+    from app.services import drive_auto_sync
+
+    return AutoSyncOut(**drive_auto_sync.project_info(session, project_id))
+
+
 @router.get("/status", response_model=DriveStatusOut)
 def drive_status(
     project_id: int,
@@ -154,6 +185,13 @@ def drive_status(
     _membership: ProjectMembership = Depends(get_membership),
 ):
     project = _project(session, project_id)
+    result = _drive_status(project)
+    result.write_enabled = drive_write_enabled()
+    result.auto_sync = _auto_sync_info(session, project_id)
+    return result
+
+
+def _drive_status(project: Project) -> DriveStatusOut:
     mode = settings.drive_mode
     if mode == "agent":
         # Sem ida ao PC aqui (a tela consulta o estado com frequência): só
@@ -205,14 +243,20 @@ def scan_drive(
 def sync_drive(
     project_id: int,
     body: DriveScanRequest,
+    background: BackgroundTasks,
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
     _membership: ProjectMembership = Depends(require_coordenador),
 ):
     """Cria os processos que faltam e vincula os arquivos novos. Idempotente."""
     project = _project(session, project_id)
-    plan = _build_plan(session, project, body)
-    result = apply_sync(session, project, plan, identity)
+    # espera a sincronização automática, se estiver rodando agora
+    with sync_lock:
+        plan = _build_plan(session, project, body)
+        result = apply_sync(session, project, plan, identity)
+    # nº das autorizações de fornecimento vinculadas a processos sem nº — em
+    # segundo plano (pelo agente, cada PDF espera o PC responder)
+    background.add_task(fill_numbers_task, project.id)
     return SyncResultOut(**result, summary=plan.summary())
 
 

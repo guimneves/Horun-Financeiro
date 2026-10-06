@@ -7,9 +7,13 @@ Dois passos separados, de propósito:
   de "ler pastas" devolve para a pessoa conferir;
 - `apply_sync` grava, a partir do mesmo plano.
 
-Idempotente: o processo é identificado pelo nº COPPETEC (ou, nos lançamentos
-sem nº, pela identidade da linha da planilha); rodar de novo só acrescenta os
-arquivos novos, sem duplicar. Alterações em processo existente importado do
+Idempotente: o processo é identificado pela PASTA (`drive_rel_path` — vale
+também para as pastas que o próprio módulo criou, inclusive "SEM NUMERO
+..."), depois pelo nº COPPETEC (ou, nos lançamentos sem nº, pela identidade
+da linha da planilha); rodar de novo só acrescenta os arquivos novos, sem
+duplicar. As cópias que o módulo gravou no drive (`Document.drive_copy_path`)
+e os arquivos desvinculados à mão (`DriveUnlinkedPath`) nunca são vinculados
+de novo. Alterações em processo existente importado do
 drive: o que entrou com R$ 0 (sincronizado sem a planilha) recebe o valor da
 planilha; e o que está no item da pasta passa para o item da planilha.
 
@@ -17,11 +21,15 @@ Item: vale o "Nº do Item" (e a categoria) da PLANILHA, não o da pasta — a
 numeração da planilha corresponde 1 a 1 à do SIGITEC (decisão do usuário,
 02/10/2026); as pastas às vezes guardam o processo em outro "Item N". Os
 arquivos NÃO são copiados — o documento aponta para o arquivo no drive.
+
+`sync_lock`: a sincronização do botão e a automática (services/
+drive_auto_sync.py) nunca rodam juntas no mesmo processo do servidor.
 """
 
 from __future__ import annotations
 
 import mimetypes
+import threading
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -31,6 +39,7 @@ from sqlmodel import Session, select
 from app.core.identity import HorunIdentity
 from app.db.models.budget import BudgetPosition
 from app.db.models.document import Document
+from app.db.models.drive_state import DriveUnlinkedPath
 from app.db.models.project import Project
 from app.db.models.purchase import PurchaseProcess
 from app.services.audit import record_event
@@ -41,6 +50,8 @@ from app.services.ledger import LedgerResult, UnnumberedEntry
 _WITH_INVOICE = {"nota_fiscal_emitida", "comprovante_recebimento", "concluido"}
 # Estados anteriores à autorização — não conciliam com um valor já lançado na planilha.
 _PRE_AUTHORIZATION = {"verificacao_orcamento", "cotacao", "aguardando_autorizacao"}
+
+sync_lock = threading.Lock()
 
 
 @dataclass
@@ -72,6 +83,9 @@ class SyncPlan:
     ledger_skipped: list[str] = field(default_factory=list)
     ledger_unused: list[str] = field(default_factory=list)  # nº de processo da planilha sem pasta correspondente
     ledger_path: str | None = None  # planilha usada, relativa à pasta do projeto
+    # arquivos que nunca viram documento "drive": cópias gravadas pelo módulo
+    # e arquivos desvinculados à mão (relativos à pasta do projeto)
+    skip_paths: set[str] = field(default_factory=set)
 
     def summary(self) -> dict[str, int]:
         counts: dict[str, int] = {
@@ -115,17 +129,16 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
         (p.category, p.item_number): p.id
         for p in session.exec(select(BudgetPosition).where(BudgetPosition.project_id == project.id))
     }
-    existing = {
-        p.process_number: p
-        for p in session.exec(select(PurchaseProcess).where(PurchaseProcess.project_id == project.id))
-        if p.process_number
-    }
+    all_processes = session.exec(select(PurchaseProcess).where(PurchaseProcess.project_id == project.id)).all()
+    existing = {p.process_number: p for p in all_processes if p.process_number}
+    by_folder = {p.drive_rel_path: p for p in all_processes if p.drive_rel_path}
     known_paths: dict[int, set[str]] = {}
-    if existing:
+    skip_paths = _skip_paths(session, project.id)
+    if all_processes:
         for doc in session.exec(
             select(Document).where(
                 Document.storage_kind == "drive",
-                Document.purchase_process_id.in_([p.id for p in existing.values()]),  # type: ignore[union-attr]
+                Document.purchase_process_id.in_([p.id for p in all_processes]),  # type: ignore[union-attr]
             )
         ):
             known_paths.setdefault(doc.purchase_process_id, set()).add(doc.storage_path)  # type: ignore[arg-type]
@@ -152,20 +165,28 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
     for scanned in scan.processes:
         plan = ProcessPlan(scanned=scanned, action="criar")
         number = scanned.process_number
+        linked = by_folder.get(scanned.folder)
+        new_files = [f for f in scanned.files if f.rel_path not in skip_paths]
 
-        if number in seen:
+        if linked is None and not number and not new_files:
+            # "SEM NUMERO" vazia e de ninguém: é a sobra de uma pasta que o
+            # módulo renomeou pelo agente (que não apaga pastas) — ou nada ainda.
+            continue
+
+        if number and number in seen and linked is None:
             plan.action = "duplicado_na_pasta"
             plan.warnings.append("Mesmo nº de processo em mais de uma pasta — só a primeira é usada.")
             items.append(plan)
             continue
-        seen.add(number)
+        if number:
+            seen.add(number)
 
-        if number in existing:
-            process = existing[number]
+        process = linked or (existing.get(number) if number else None)
+        if process is not None:
             plan.action = "existe"
             plan.existing_process_id = process.id
             have = known_paths.get(process.id, set())
-            plan.new_files = sum(1 for f in scanned.files if f.rel_path not in have)
+            plan.new_files = sum(1 for f in new_files if f.rel_path not in have)
             entry = entries.get(number)
             if entry is not None:
                 used_ledger.add(number)
@@ -213,7 +234,7 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
             items.append(plan)
             continue
 
-        plan.new_files = len(scanned.files)
+        plan.new_files = len(new_files)
         plan.status = scanned.inferred_status
         if scanned.cancelled:
             plan.value_source = "cancelado"
@@ -321,7 +342,21 @@ def plan_sync(session: Session, project: Project, scan: ScanResult, ledger: Ledg
         scan=scan,
         ledger_skipped=ledger.skipped if ledger else [],
         ledger_unused=sorted(set(entries) - used_ledger - set(existing)) if ledger else [],
+        skip_paths=skip_paths,
     )
+
+
+def _skip_paths(session: Session, project_id: int) -> set[str]:
+    """Cópias que o módulo gravou no drive + arquivos desvinculados à mão."""
+    copies = session.exec(
+        select(Document.drive_copy_path)
+        .join(PurchaseProcess, Document.purchase_process_id == PurchaseProcess.id)  # type: ignore[arg-type]
+        .where(PurchaseProcess.project_id == project_id, Document.drive_copy_path.is_not(None))  # type: ignore[union-attr]
+    ).all()
+    unlinked = session.exec(
+        select(DriveUnlinkedPath.rel_path).where(DriveUnlinkedPath.project_id == project_id)
+    ).all()
+    return {p for p in copies if p} | set(unlinked)
 
 
 def _without_value(process: PurchaseProcess) -> bool:
@@ -336,6 +371,15 @@ def _without_value(process: PurchaseProcess) -> bool:
 def _status_with_value(status: str) -> str:
     # como na criação: lançado na planilha = realizado
     return "autorizado" if status in _PRE_AUTHORIZATION else status
+
+
+def _adopt_folder(session: Session, process_id: int | None, folder: str) -> None:
+    """Processo que já existia (criado no módulo) e cuja pasta alguém criou
+    no drive: passa a conhecê-la — os anexos seguintes são copiados para lá."""
+    process = session.get(PurchaseProcess, process_id) if process_id else None
+    if process is not None and folder and not process.drive_rel_path:
+        process.drive_rel_path = folder
+        session.add(process)
 
 
 def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunIdentity) -> dict[str, int]:
@@ -362,6 +406,7 @@ def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunI
                             "item": f"{item.scanned.category} Nº {item.scanned.item_number}"},
                 )
         if item.action == "preencher_valor":
+            _adopt_folder(session, item.existing_process_id, scanned.folder)
             process = session.get(PurchaseProcess, item.existing_process_id)
             if process is not None and _without_value(process):
                 previous = process.status
@@ -435,6 +480,7 @@ def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunI
             known: set[str] = set()
         elif item.action in ("existe", "corrigir_item"):
             process_id = item.existing_process_id
+            _adopt_folder(session, process_id, scanned.folder)
             known = {
                 d.storage_path
                 for d in session.exec(
@@ -447,7 +493,7 @@ def apply_sync(session: Session, project: Project, plan: SyncPlan, actor: HorunI
             continue
 
         for f in scanned.files:
-            if f.rel_path in known:
+            if f.rel_path in known or f.rel_path in plan.skip_paths:
                 continue
             session.add(
                 Document(

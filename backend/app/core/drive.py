@@ -1,5 +1,4 @@
-"""Utilitários de caminho do drive do Financeiro (pasta do OneDrive) — só
-leitura, nunca escrita. Todo caminho que vem de fora (API) passa por
+"""Utilitários de caminho do drive do Financeiro (pasta do OneDrive). Todo caminho que vem de fora (API) passa por
 `join_rel`/`safe_join`, que impedem sair da pasta do projeto (`..`, caminho
 absoluto, letra de unidade etc.).
 """
@@ -20,6 +19,19 @@ class DriveError(Exception):
 
 class DriveNotFound(DriveError):
     """O arquivo ou a pasta pedida não existe."""
+
+
+class DriveUnavailable(DriveError):
+    """O drive não respondeu agora (agente offline ou sem resposta no prazo) —
+    vale tentar de novo mais tarde."""
+
+
+class DriveReadOnly(DriveError):
+    """A pasta do drive está liberada só para leitura (Horun Agent)."""
+
+
+class DriveFileExists(DriveError):
+    """Já existe um arquivo com esse nome — o módulo nunca sobrescreve."""
 
 
 def fs_path(path: str | os.PathLike[str]) -> str:

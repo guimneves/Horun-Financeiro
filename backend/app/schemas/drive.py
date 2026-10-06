@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -52,12 +53,30 @@ class SyncResultOut(BaseModel):
     summary: dict[str, int]  # o plano que foi aplicado
 
 
+class AutoSyncOut(BaseModel):
+    """Sincronização automática com o drive (services/drive_auto_sync.py)."""
+
+    enabled: bool
+    interval_minutes: int
+    last_run_at: datetime | None = None  # última rodada que chegou ao fim
+    last_status: str = ""  # ok | parcial | pulada | erro
+    last_message: str = ""
+    # deste projeto, na última rodada
+    new_files: int = 0
+    new_processes: int = 0
+    copies: int = 0
+    error: str | None = None
+
+
 class DriveStatusOut(BaseModel):
     configured: bool  # MODULE_DRIVE_ROOT definido neste servidor (ou modo agente)
     mode: str = "local"  # "local" (disco deste servidor) | "agent" (Horun Agent)
     project_folder: str | None
     available: bool  # a pasta do projeto existe e está acessível agora
     message: str | None = None
+    # MODULE_DRIVE_WRITE: anexos são copiados para a pasta do processo
+    write_enabled: bool = False
+    auto_sync: AutoSyncOut | None = None
 
 
 class DriveEntryOut(BaseModel):

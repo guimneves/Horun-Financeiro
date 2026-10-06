@@ -71,3 +71,19 @@ def read_bytes(root: str, path: str, *, max_bytes: int | None = None, timeout: f
     with Session(db_session.engine) as s:
         chunk = settings.agent_chunk_bytes if impl.agent_supports(s, "read_range") else None
         return impl.read_bytes(s, root, path, timeout=timeout, chunk_size=chunk, max_bytes=limit)
+
+
+def write_bytes(root: str, path: str, content: bytes, *, timeout: float | None = None) -> None:
+    """Grava um arquivo pelo agente. ATENÇÃO: o agente cria as pastas e
+    SOBRESCREVE em silêncio — quem chama confere antes se o nome está livre
+    (core/drive_backend.py `AgentDrive.write_bytes`). Exige a pasta em
+    "read-write" no config.json do agente (senão `code="read_only"`)."""
+    with Session(db_session.engine) as s:
+        impl.write_bytes(s, root, path, content, timeout=timeout)
+
+
+def move_files(root: str, moves: list[dict], *, timeout: float | None = None) -> list[str]:
+    """Move arquivos (não pastas), tudo ou nada, nunca sobrescreve
+    (agente >= 0.2.0; pasta em "read-move" ou "read-write")."""
+    with Session(db_session.engine) as s:
+        return impl.move_files(s, root, moves, timeout=timeout)

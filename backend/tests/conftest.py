@@ -18,6 +18,11 @@ os.environ["MODULE_DATABASE_URL"] = f"sqlite:///{_db_path}"
 # Uploads dos testes numa pasta temporária — senão caem em ./uploads, dentro
 # do projeto.
 os.environ["MODULE_UPLOAD_ROOT"] = tempfile.mkdtemp(prefix="financeiro-uploads-")
+# O laço da sincronização automática não roda nos testes — os testes dela
+# chamam app.services.drive_auto_sync direto. Escrita no drive desligada por
+# padrão (os testes de escrita ligam com monkeypatch).
+os.environ["MODULE_DRIVE_AUTO_SYNC_MINUTES"] = "0"
+os.environ["MODULE_DRIVE_WRITE"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
