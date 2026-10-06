@@ -5,7 +5,8 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY app ./app
 
-RUN pip install --no-cache-dir ".[postgres]"
+# import = openpyxl (leitura das planilhas: orçamento, equipe, sincronização)
+RUN pip install --no-cache-dir ".[postgres,import]"
 
 EXPOSE 8000
 

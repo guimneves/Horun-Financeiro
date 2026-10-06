@@ -1,31 +1,109 @@
-# Compose para desenvolvimento/teste standalone deste módulo (sem o Horun
-# Core). Quando o módulo for "plugado" na plataforma de verdade, ele passa
-# a entrar na rede `horun-network` (criada pelo Core — ver
-# Prompt_Horun_Core.md, seção 9.2) e ganha `container_name`s previsíveis, sem
-# porta exposta ao host — ver Prompt_Horun_Core.md, seção 8, para o
-# encaixe da interface, e o exemplo real em `RE7S-Horun/docker-compose.yml`.
+# Produção: Horun · Financeiro plugado no Horun Core (passo a passo em
+# docs/DEPLOY.md). Antes do primeiro `docker compose up -d --build`:
+#   - a rede compartilhada já existe (criada uma vez pelo Core):
+#       docker network create horun-network
+#   - `.env` preenchido a partir do `.env.example` (nunca versionado).
+#
+# Portas: NENHUMA da API é publicada — o Core alcança "financeiro-backend" e
+# "financeiro-frontend" pela horun-network. A única porta no host é a 8002, a
+# porta estreita do Horun Agent (frontend/nginx.conf), que só repassa as 3
+# rotas do próprio agente (Prompt_Horun_Modulo.md, seção 10).
 
 services:
-  backend:
-    build: ./backend
+  financeiro-db:
+    image: postgres:16-alpine
+    container_name: financeiro-db
+    restart: unless-stopped
     environment:
-      # DEV_MODE = todo pedido é o usuário "admin" fixo, sem login. Por isso
-      # as portas abaixo só escutam na própria máquina (127.0.0.1): publicar
-      # em 0.0.0.0 entregaria a API inteira, como admin, a qualquer PC da
-      # rede do laboratório.
-      HORUN_DEV_MODE: "true"
-      # Avisos pelo Horun Core (opcional; vazio = sem avisos) — ver .env.example
+      POSTGRES_DB: financeiro
+      POSTGRES_USER: financeiro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Volume nomeado: sobrevive a `docker compose down`/rebuild. Só some com
+      # `docker compose down -v`, explícito.
+      - financeiro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financeiro -d financeiro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sem "ports:" — só os containers desta rede falam com o banco.
+
+  db-backup:
+    # Dump ao subir e a cada BACKUP_INTERVAL_HOURS, verificado, com rotação de
+    # BACKUP_KEEP_DAYS dias, numa pasta do Windows FORA do volume do Docker
+    # (Prompt_Horun_Core.md, seção 9.4). Mesmo script do Core e do RE7S.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      financeiro-db:
+        condition: service_healthy
+    environment:
+      PGHOST: financeiro-db
+      PGUSER: financeiro
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: financeiro
+      BACKUP_PREFIX: financeiro
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./deploy/backup/pg_backup.sh:/pg_backup.sh:ro
+    entrypoint: ["/bin/sh", "/pg_backup.sh"]
+
+  financeiro-backend:
+    build: ./backend
+    container_name: financeiro-backend
+    restart: unless-stopped
+    depends_on:
+      financeiro-db:
+        condition: service_healthy
+    environment:
+      HORUN_DEV_MODE: "false"
+      MODULE_DATABASE_URL: postgresql+psycopg://financeiro:${POSTGRES_PASSWORD}@financeiro-db:5432/financeiro
+      MODULE_SECRET_KEY: ${MODULE_SECRET_KEY}
+      MODULE_COORDENADOR_PASSWORD: ${MODULE_COORDENADOR_PASSWORD:-}
+      MODULE_UPLOAD_ROOT: /data/uploads
+      MODULE_MAX_UPLOAD_MB: ${MODULE_MAX_UPLOAD_MB:-50}
+      # Drive: no servidor, o OneDrive NÃO está nesta máquina — quem lê é o
+      # Horun Agent instalado no PC onde ele sincroniza (docs/AGENT_CONTRACT.md).
+      # MODULE_DRIVE_AGENT_ROOT é o nome da pasta liberada no config.json dele.
+      MODULE_DRIVE_MODE: ${MODULE_DRIVE_MODE:-agent}
+      MODULE_DRIVE_AGENT_ROOT: ${MODULE_DRIVE_AGENT_ROOT:-financeiro}
+      MODULE_DRIVE_ROOT: ${MODULE_DRIVE_ROOT:-}
+      MODULE_AGENT_TASK_TIMEOUT: ${MODULE_AGENT_TASK_TIMEOUT:-30}
+      # Avisos pelo Horun Core (sininho/e-mail) — vazios = sem avisos.
       HORUN_CORE_URL: ${HORUN_CORE_URL:-}
       HORUN_NOTIFY_TOKEN: ${HORUN_NOTIFY_TOKEN:-}
-    ports:
-      - "127.0.0.1:8000:8000"
+    volumes:
+      # Documentos enviados pela tela (cotações, notas...) — volume nomeado,
+      # mesma disciplina do banco.
+      - financeiro_uploads:/data/uploads
+    networks:
+      - default
+      - horun-network
 
-  frontend:
+  financeiro-frontend:
     build:
       context: ./frontend
       args:
-        # "/" serve standalone; quando plugado no Core, sobrescrever com
-        # "/m/financeiro/" (ver Prompt_Horun_Modulo.md, seção 6).
-        VITE_BASE: /
+        # Sub-caminho sob o qual o Core serve o módulo.
+        VITE_BASE: /m/financeiro/
+    container_name: financeiro-frontend
+    restart: unless-stopped
+    depends_on:
+      - financeiro-backend
+    networks:
+      - default
+      - horun-network
     ports:
-      - "127.0.0.1:8080:80"
+      # Só a porta estreita do Horun Agent — nunca a 80 (ver nginx.conf).
+      - "8002:8002"
+
+networks:
+  horun-network:
+    external: true
+
+volumes:
+  financeiro_pgdata:
+  financeiro_uploads:

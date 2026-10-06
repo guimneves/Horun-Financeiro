@@ -124,16 +124,12 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`**: estável. **214 testes** do backend passam; frontend compila e
-  passa no lint. Além do que já havia (paridade, leitura de pastas no modo local,
-  redação de valores, política de saldo...), tem desde 02/10: importação do
-  orçamento e da Equipe Executora a partir da planilha, leitor de PDF na página,
-  aba Resumo com gráficos (indicadores, uso por categoria, ritmo de execução,
-  Quadro Resumo, parcelas, alertas), sincronização que bate com a planilha item a
-  item e Orçamento agrupado por categoria. Ver CHANGELOG.
-- **`wip/drive-agent`**: `master` + modo agente do drive, **pronto nos testes**
-  (**223 passam**, inclusive o drive por um agente falso). Recebe merge da
-  `master` a cada mudança. Falta o ambiente real (seção 7).
+- **`master`** (única desde 06/10/2026): **235 testes** do backend passam;
+  frontend compila e passa no lint. Inclui o modo agente do drive (a
+  `wip/drive-agent` foi incorporada) e a configuração de produção:
+  `docker-compose.yml` (Postgres, backup, porta 8002 do agente) e o passo a
+  passo em `docs/DEPLOY.md`. Mesmo código nos dois modos: servidor com
+  `MODULE_DRIVE_MODE=agent`, testes locais com `local`.
 - **Apresentação local**: `Programas/Horun/Apresentar_Financeiro.bat` (fora do
   repositório) roda a `master` em modo DEV com o drive local e a base em
   `C:\HorunDemo\Financeiro`. Reabrir o .bat a cada mudança; a planilha precisa

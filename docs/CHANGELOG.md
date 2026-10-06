@@ -5,14 +5,25 @@ Registro do que mudou desde o último commit do repositório
 sessão de trabalho iniciada em 29/09/2026. Para o estado atual, decisões e
 plano, ver [`ESTADO_E_PLANOS.md`](ESTADO_E_PLANOS.md).
 
-Duas branches carregam este trabalho:
-
-| Branch | O que tem | Testes |
-|---|---|---|
-| `master` | Tudo abaixo **exceto** o modo agente do drive. É o estado estável. | 214 testes do backend passam; frontend compila (`tsc -b`) e passa no lint |
-| `wip/drive-agent` | `master` + o modo agente do drive (pronto nos testes; falta o ambiente real). Recebe merge da `master` a cada mudança. | 223 testes do backend passam |
+Desde 06/10/2026 há uma branch só, a `master` (o modo agente, antes na
+`wip/drive-agent`, foi incorporado): 235 testes do backend passam; frontend
+compila (`tsc -b`) e passa no lint.
 
 ---
+
+## 06/10/2026 — Pronto para o servidor (modo agente na master)
+
+- A `wip/drive-agent` entrou na `master` (avanço direto, sem conflito): o modo
+  agente do drive vale no servidor e o modo local continua no `.bat` de testes.
+- `docker-compose.yml` passa a ser o de **produção**: Postgres, `db-backup`,
+  `financeiro-backend`/`financeiro-frontend` na `horun-network`, sem porta da
+  API no host; só a **8002**, porta estreita do Horun Agent (`frontend/nginx.conf`,
+  repassa `/agent/...` para `/api/agent/...`). O antigo virou
+  `docker-compose.dev.yml` (standalone de desenvolvimento).
+- Imagem do backend com o extra `import` (openpyxl): sem ele, importar a
+  planilha falharia no servidor.
+- `.env.example` de produção; `docs/DEPLOY.md` com o passo a passo (servidor,
+  cadastro no Core, instalação do agente no PC do OneDrive, carga do projeto).
 
 ## 05/10/2026 — Aba Manual, interface no celular e avisos pelo Core
 

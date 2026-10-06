@@ -34,7 +34,7 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 ## Comandos
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q        # master: 214 passam
+cd backend && .venv/Scripts/python -m pytest -q        # master: 235 passam
 cd frontend && npx tsc -b && npx oxlint
 ```
 
@@ -43,6 +43,9 @@ numa pasta temporária.
 
 ## Estado
 
-Ver seção 5 de `docs/ESTADO_E_PLANOS.md`. `master` = estável; `wip/drive-agent` =
-`master` + modo agente do drive, pronto nos testes (223 passam); recebe merge da
-`master` a cada mudança. Pendências e próximos passos: seções 8 e 9.
+Ver seção 5 de `docs/ESTADO_E_PLANOS.md`. Desde 06/10/2026 o modo agente do
+drive está na `master` (a `wip/drive-agent` foi incorporada): o mesmo código roda
+no servidor com `MODULE_DRIVE_MODE=agent` (`docker-compose.yml`, guia em
+`docs/DEPLOY.md`) e localmente com `MODULE_DRIVE_MODE=local`
+(`Apresentar_Financeiro.bat`; `docker-compose.dev.yml` para o standalone em
+Docker). Pendências e próximos passos: seções 8 e 9.
