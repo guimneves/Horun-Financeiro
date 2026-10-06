@@ -42,7 +42,10 @@ um agente antigo continua funcionando para as operações antigas.
 O Financeiro usa uma única pasta liberada (root) chamada **`financeiro`**
 (configurável no servidor por `MODULE_DRIVE_AGENT_ROOT`), apontando para a pasta
 que CONTÉM a pasta de cada projeto (ex. `...\Programas\Maturação artificial`).
-O Financeiro só LÊ — nunca pede `write_file`.
+Desde 06/10/2026, com `MODULE_DRIVE_WRITE=true`, o Financeiro também pede
+`write_file` (só para nomes livres — confere com `list_tree` antes, porque o
+agente sobrescreve) e `move_files` (pasta "SEM NUMERO" que ganha o nº); para
+isso o root precisa de `"mode": "read-write"`. Sem a variável, só lê.
 
 ## 1. Nova operação: `list_tree`
 

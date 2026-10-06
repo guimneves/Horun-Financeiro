@@ -6,10 +6,48 @@ sessão de trabalho iniciada em 29/09/2026. Para o estado atual, decisões e
 plano, ver [`ESTADO_E_PLANOS.md`](ESTADO_E_PLANOS.md).
 
 Desde 06/10/2026 há uma branch só, a `master` (o modo agente, antes na
-`wip/drive-agent`, foi incorporado): 235 testes do backend passam; frontend
+`wip/drive-agent`, foi incorporado): 254 testes do backend passam; frontend
 compila (`tsc -b`) e passa no lint.
 
 ---
+
+## 06/10/2026 — Drive e módulo sincronizados nos dois sentidos
+
+Decisão do mantenedor: o drive e o módulo ficam sempre em sincronia (antes o
+módulo só lia o drive). Ver a decisão 13 em `ESTADO_E_PLANOS.md`.
+
+- **Anexo vai para a pasta do processo** (`services/drive_write.py`): com
+  `MODULE_DRIVE_WRITE=true` (padrão desligado), todo documento anexado num
+  processo é gravado também na pasta dele no drive, depois da resposta (o
+  envio não espera o agente). A cópia no servidor continua. Nunca sobrescreve
+  ("nome (2).pdf") e nunca apaga. Cada documento mostra **na pasta ✓**,
+  **aguardando o leitor de pastas** (agente offline) ou **não copiado:
+  motivo** (ex. pasta "read" no agente).
+- **Pasta do processo**: aproveita a pasta da categoria e a "Item N - ..."
+  que existirem; senão cria com os nomes do drive real. Nome
+  `AAAA-N título` ou, sem nº, `SEM NUMERO dd-mm-aaaa título` (data de
+  criação). Quando o nº é informado (edição ou autorização), os arquivos
+  passam para `AAAA-N título` com um `move_files` só; a pasta vazia que
+  sobra é apagada no modo local (pelo agente ela fica, e é ignorada).
+- **Nº lido da autorização de fornecimento** (`services/af_number.py`,
+  `pypdf` no extra `import`): "AUTORIZAÇÃO DE COMPRA AAAA/N" nas 2 primeiras
+  páginas preenche o nº do processo sem nº — ao anexar a AF ou quando a
+  sincronização vincula uma AF. Nº diferente do cadastrado ou já de outro
+  processo: só um aviso (e o histórico).
+- **Leitura**: pastas "SEM NUMERO" são reconhecidas; o processo é achado
+  também pela pasta (não duplica o que o módulo criou); as cópias gravadas
+  pelo módulo e os arquivos **desvinculados** não voltam a ser vinculados.
+  Mudança de regra: antes, sincronizar de novo revinculava o que alguém
+  desvinculou.
+- **Sincronização automática** (`services/drive_auto_sync.py`): a cada
+  `MODULE_DRIVE_AUTO_SYNC_MINUTES` (padrão 30; 0 desliga) faz o mesmo que o
+  botão Sincronizar em cada projeto, lê o nº das AFs e refaz cópias e
+  renomeações pendentes. Concessão no banco (vários workers não rodam
+  juntos), pulada com o agente offline. A tela Drive mostra "Sincronização
+  automática: última às HH:MM — N arquivo(s) novo(s)".
+- Configuração: `.env.example`, `docker-compose.yml` e `docs/DEPLOY.md`
+  (`"mode": "read-write"` no agente para gravar). Manual atualizado.
+- 19 testes novos (254 no total), só com pastas temporárias e PDF sintético.
 
 ## 06/10/2026 — Pronto para o servidor (modo agente na master)
 

@@ -124,12 +124,18 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`** (única desde 06/10/2026): **235 testes** do backend passam;
+- **`master`** (única desde 06/10/2026): **254 testes** do backend passam;
   frontend compila e passa no lint. Inclui o modo agente do drive (a
   `wip/drive-agent` foi incorporada) e a configuração de produção:
   `docker-compose.yml` (Postgres, backup, porta 8002 do agente) e o passo a
   passo em `docs/DEPLOY.md`. Mesmo código nos dois modos: servidor com
   `MODULE_DRIVE_MODE=agent`, testes locais com `local`.
+- **Sincronização com o drive nos dois sentidos** (06/10/2026, decisão 13):
+  anexos copiados para a pasta do processo (`MODULE_DRIVE_WRITE`, padrão
+  desligado), pasta "SEM NUMERO" renomeada quando o nº chega, nº lido da
+  autorização de fornecimento, sincronização automática a cada
+  `MODULE_DRIVE_AUTO_SYNC_MINUTES` (padrão 30). Ainda não testada com o
+  agente real em "read-write".
 - **Apresentação local**: `Programas/Horun/Apresentar_Financeiro.bat` (fora do
   repositório) roda a `master` em modo DEV com o drive local e a base em
   `C:\HorunDemo\Financeiro`. Reabrir o .bat a cada mudança; a planilha precisa
@@ -163,6 +169,20 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
     estimado.
 12. Ordem da apresentação aos supervisores: rodar localmente antes de implantar
     no Horun.
+13. **Drive e módulo sempre sincronizados, nos dois sentidos** (06/10/2026 —
+    REVERTE a regra "o módulo só lê o drive" e a escrita "descartada" da
+    seção 10): (a) todo documento anexado num processo também é gravado na
+    pasta dele no drive; (b) o que aparece nas pastas entra no módulo sozinho,
+    pela sincronização automática periódica. Regras: lê sempre; escreve só
+    arquivos NOVOS e só com `MODULE_DRIVE_WRITE=true` (padrão desligado — a
+    apresentação local aponta para o OneDrive real); nunca sobrescreve
+    ("nome (2).pdf"), nunca apaga; só move os arquivos da própria pasta
+    "SEM NUMERO <dd-mm-aaaa> <título>" quando o processo ganha o nº. No modo
+    agente, o root precisa de `"mode": "read-write"`. Processo sem nº:
+    pasta "SEM NUMERO" com a data de criação (escolha do mantenedor). O nº é
+    lido da autorização de fornecimento ("AUTORIZAÇÃO DE COMPRA AAAA/N") e
+    nunca sobrescreve um nº já cadastrado. Arquivo desvinculado no módulo não
+    volta a ser vinculado pela sincronização (`DriveUnlinkedPath`).
 
 ## 7. Modo agente — divisão de trabalho e o que falta
 
@@ -213,8 +233,9 @@ de liberar o gateway do Core).
    instalação, ver instalações (conectado/sem sinal, versão) e revogar. Só o
    admin do Core enxerga (para os outros a listagem dá 403 e o painel some).
 5. No PC do OneDrive: Agent-Horun 0.4.0, `config.json` com o root `financeiro`
-   em `"mode": "read"` (ou `"read_only": true`) apontando para a pasta que
-   contém as pastas dos projetos.
+   apontando para a pasta que contém as pastas dos projetos — em
+   `"mode": "read-write"` se o servidor tiver `MODULE_DRIVE_WRITE=true`
+   (decisão 13), senão `"mode": "read"`.
 
 ### Consequências aceitas do modo agente
 Latência de um intervalo de consulta por ação; sem o PC ligado não se lista nem
@@ -282,9 +303,9 @@ Implementadas: ver CHANGELOG. Discutidas e **não** feitas:
   integração direta com a API do OneDrive (Microsoft Graph).
 - **Aviso do OneDrive "Files On-Demand"**: ler arquivo só-nuvem o baixa; em Docker
   no Windows pode falhar — marcar a pasta "manter sempre neste dispositivo".
-- **Camada de armazenamento abstrata** com pasta legível por humanos (já feita
-  para leitura via `DriveBackend` no WIP; escrita de volta no drive foi
-  deliberadamente **descartada**: o módulo só lê).
+- **Camada de armazenamento abstrata** com pasta legível por humanos (feita
+  via `DriveBackend`). A escrita de volta no drive, antes **descartada**, foi
+  adotada em 06/10/2026 (decisão 13 da seção 6).
 - **Importador como tela vs. CLI**: foi escolhida a tela no próprio programa.
 - **Substituir Alembic**: ver decisão 7.
 - Cache de PDFs buscados pelo agente (acelera consulta, custa espaço).
@@ -309,8 +330,7 @@ sem documentos de projeto; sem câmbio; concorrência sem controle; sem paginaç
 1. `git clone https://github.com/guimneves/Horun-Financeiro` e
    `git switch wip/drive-agent` (para continuar o modo agente) ou fique em `master`.
 2. Ler, nesta ordem: `CLAUDE.md`, este arquivo, `CHANGELOG.md`, `AGENT_CONTRACT.md`.
-3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **214 passed**
-   (`wip/drive-agent`: 223).
+3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **254 passed**.
 4. As memórias da sessão original ficam fora do repositório (no perfil do
    Claude Code da conta antiga); o essencial delas está na seção 1 e 6 acima.
 5. Contexto externo: `Programas/Horun Core` (design-system e plataforma),

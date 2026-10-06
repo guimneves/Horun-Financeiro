@@ -27,6 +27,10 @@ No `.env`, preencha:
 - `MODULE_COORDENADOR_PASSWORD` — a senha mestra inicial de coordenador.
 - `BACKUP_DIR` — uma pasta do Windows fora do Docker (ex. `C:/HorunBackups/financeiro`).
 - Deixe `MODULE_DRIVE_MODE=agent` e `MODULE_DRIVE_AGENT_ROOT=financeiro`.
+- `MODULE_DRIVE_WRITE=true` se os documentos anexados no Financeiro devem ir
+  também para a pasta do processo no drive (exige `"mode": "read-write"` no
+  agente, passo 4). `MODULE_DRIVE_AUTO_SYNC_MINUTES` (padrão 30) é o intervalo
+  da sincronização automática; `0` desliga.
 
 ```powershell
 docker compose up -d --build
@@ -96,6 +100,9 @@ notepad config.json
 
 - O nome `financeiro` tem que ser igual a `MODULE_DRIVE_AGENT_ROOT` do servidor.
 - `"mode": "read"` — o Financeiro só lê o drive; o agente recusa qualquer escrita.
+- `"mode": "read-write"` — necessário com `MODULE_DRIVE_WRITE=true`: o Financeiro
+  grava os anexos na pasta de cada processo e renomeia a pasta "SEM NUMERO ..."
+  quando o nº chega. Ele nunca sobrescreve nem apaga arquivos.
 - Se este PC já tem um agente para outro módulo, **não instale outro**: acrescente
   este bloco em `servers` do `config.json` existente e reinicie o agente.
 

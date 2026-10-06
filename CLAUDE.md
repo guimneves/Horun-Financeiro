@@ -10,8 +10,13 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 
 - **Repositório público: nunca commitar dados reais** (valores, nomes de pessoas
   ou fornecedores, planilhas, PDFs, bancos `.db`). Testes usam estruturas sintéticas.
-- **O módulo só LÊ o drive.** Nunca copiar, mover, escrever ou apagar arquivos nele.
-  Documento do tipo "drive" apenas aponta para o arquivo.
+- **Drive: lê sempre; escreve só arquivos novos, e só com `MODULE_DRIVE_WRITE=true`**
+  (decisão de 06/10/2026, `services/drive_write.py`). NUNCA sobrescreve (nome
+  ocupado vira "nome (2).pdf") e NUNCA apaga — remover/desvincular documento no
+  módulo não toca no drive. A única movimentação: os arquivos da pasta "SEM NUMERO
+  ..." de um processo passam para "AAAA-N título" quando o nº é informado.
+  Documento do tipo "drive" apenas aponta para o arquivo. Testes só em pastas
+  temporárias — nunca a pasta real do OneDrive nem `C:\HorunDemo`.
 - Comentários, mensagens de erro e textos de interface em **português**; nomes de
   código em inglês, como já está.
 - **A planilha de acompanhamento é a referência de regra** (meses de calendário
@@ -34,7 +39,7 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 ## Comandos
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q        # master: 235 passam
+cd backend && .venv/Scripts/python -m pytest -q        # master: 254 passam
 cd frontend && npx tsc -b && npx oxlint
 ```
 

@@ -76,6 +76,11 @@ services:
       MODULE_DRIVE_AGENT_ROOT: ${MODULE_DRIVE_AGENT_ROOT:-financeiro}
       MODULE_DRIVE_ROOT: ${MODULE_DRIVE_ROOT:-}
       MODULE_AGENT_TASK_TIMEOUT: ${MODULE_AGENT_TASK_TIMEOUT:-30}
+      # Gravar no drive (anexos na pasta do processo) — exige a pasta em
+      # "read-write" no config.json do agente. Sincronização automática a
+      # cada N minutos (0 = desligada).
+      MODULE_DRIVE_WRITE: ${MODULE_DRIVE_WRITE:-false}
+      MODULE_DRIVE_AUTO_SYNC_MINUTES: ${MODULE_DRIVE_AUTO_SYNC_MINUTES:-30}
       # Avisos pelo Horun Core (sininho/e-mail) — vazios = sem avisos.
       HORUN_CORE_URL: ${HORUN_CORE_URL:-}
       HORUN_NOTIFY_TOKEN: ${HORUN_NOTIFY_TOKEN:-}
