@@ -9,6 +9,10 @@
 # porta estreita do Horun Agent (frontend/nginx.conf), que só repassa as 3
 # rotas do próprio agente (Prompt_Horun_Modulo.md, seção 10).
 
+# Nome fixo do projeto: sem ele, o Docker usa o NOME DA PASTA para nomear os
+# volumes (banco, documentos) — renomear a pasta faria o módulo abrir vazio.
+name: horun-financeiro
+
 services:
   financeiro-db:
     image: postgres:16-alpine
