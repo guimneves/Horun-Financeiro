@@ -1,69 +1,150 @@
-# Implantação do Financeiro no Horun (servidor + Horun Agent)
+# Financeiro no Horun — passo a passo
 
-Três máquinas/papéis:
+Guia para instalar o Financeiro no Horun e mostrar a importação de um projeto.
+Os comandos são copiados e colados no **PowerShell** (a janela azul/preta de
+comandos do Windows). Onde aparece `<...>`, troque pelo seu valor — e esses
+valores (senhas, códigos) **nunca** vão para o GitHub nem para mensagens.
 
-| Onde | O que roda |
+## Como as peças se encaixam
+
+| Peça | Onde fica | Para que serve |
+|---|---|---|
+| **Financeiro** | no servidor do laboratório, junto com o Horun e os outros módulos | as telas, os cálculos e o banco de dados |
+| **Pasta dos projetos** | num computador do laboratório | as pastas de cada projeto, com a planilha de acompanhamento e os PDFs de cada compra |
+| **Leitor de pastas** (chamado de "Horun Agent") | no mesmo computador da pasta | um programinha que entrega ao Financeiro o que está na pasta, quando o Financeiro pede |
+
+O servidor não enxerga o disco dos outros computadores. Por isso existe o
+leitor de pastas: ele roda no computador da pasta, fica perguntando ao servidor
+"precisa de alguma coisa?" e responde com a lista de pastas ou o arquivo pedido.
+Esse computador não precisa liberar nada na rede — é sempre ele quem chama o servidor.
+
+**Por enquanto:** a pasta dos projetos é uma **cópia** baixada para o seu
+computador, e o leitor vai rodar nele. Quando decidirmos o computador
+definitivo (o que fica sempre ligado e sincroniza o OneDrive), o leitor é
+instalado lá do mesmo jeito, só trocando o endereço da pasta.
+
+Para testar coisas novas sem mexer no servidor, continue usando o
+`Apresentar_Financeiro.bat` no seu computador: ele tem dados próprios e lê a
+pasta direto, sem o leitor.
+
+---
+
+## Parte 1 — Instalar o Financeiro no servidor (já feito em 06/10/2026)
+
+No servidor, a pasta `C:\Horun` guarda o Horun e cada módulo, lado a lado:
+`Horun-Core`, `Horun-RE7S`, `Horun-Financeiro`, `Horun-Reagentes`, `Horun-Amostras`.
+
+1. **Baixar o Financeiro do GitHub:**
+
+   ```powershell
+   cd C:\Horun
+   git clone https://github.com/guimneves/Horun-Financeiro.git
+   cd Horun-Financeiro
+   ```
+
+2. **Criar o arquivo de configuração** (`.env`). Ele guarda as senhas deste
+   servidor e nunca sai dele.
+
+   ```powershell
+   copy .env.example .env
+   mkdir C:\HorunBackups\financeiro
+   notepad .env
+   ```
+
+   Preencha três linhas:
+   - `POSTGRES_PASSWORD` — senha do banco de dados;
+   - `MODULE_SECRET_KEY` — uma chave secreta;
+   - `MODULE_COORDENADOR_PASSWORD` — a senha mestra de coordenador do Financeiro (você escolhe).
+
+   Para as duas primeiras, gere valores aleatórios com o comando abaixo (rode
+   uma vez para cada, copie o resultado direto para o arquivo, não envie a ninguém):
+
+   ```powershell
+   $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | % { $_.ToString('x2') })
+   ```
+
+3. **Ligar o Financeiro:**
+
+   ```powershell
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+   Na primeira vez leva alguns minutos. No fim, as quatro linhas devem dizer
+   **Up**, e as de `backend`, `frontend` e `db` também **(healthy)**.
+
+4. **Abrir a passagem do leitor de pastas** no firewall do servidor (PowerShell
+   aberto **como administrador**, uma vez só):
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "Horun Financeiro - agente (8002)" -Direction Inbound -Protocol TCP -LocalPort 8002 -Action Allow
+   ```
+
+   Essa passagem (a "porta 8002") só aceita os pedidos do leitor de pastas.
+   Para conferir, de outro computador:
+   `curl.exe -i http://192.168.31.80:8002/agent/enroll-codes` → a resposta tem
+   que começar com **404** (quer dizer: aberta, e sem mostrar nada indevido).
+
+**Os dados ficam guardados mesmo se o Financeiro for desligado ou atualizado.**
+Só **nunca** use `docker compose down -v` — o `-v` apaga os dados.
+
+## Parte 2 — Colocar o Financeiro no menu do Horun (já feito)
+
+No Horun: **Admin → Módulos → Cadastrar módulo**
+
+| Campo | Valor |
 |---|---|
-| **Servidor do laboratório** (onde já rodam o Core e o RE7S) | `docker compose` deste repositório: banco, backup, backend e frontend |
-| **PC onde o OneDrive sincroniza** a pasta dos projetos | **Horun Agent** — lê a pasta e entrega ao servidor; o PC não abre porta nenhuma |
-| **Seu PC de testes** | continua com o `Apresentar_Financeiro.bat` (modo local, base própria em `C:\HorunDemo\Financeiro`) — não interfere no servidor |
+| Id | `financeiro` |
+| Nome público | `Financeiro` |
+| URL interna (backend) | `http://financeiro-backend:8000` |
+| URL interna (frontend) | `http://financeiro-frontend:80` |
 
-Ordem: 1 → 2 → 3 → 4 → 5. Os valores entre `<...>` são seus; nada disso vai para o GitHub.
+Atenção ao **8000** — o 8002 é só do leitor de pastas; com 8002 aqui o módulo
+aparece "fora do ar". Para corrigir depois, use **editar** ao lado do nome.
 
-## 1. Servidor: subir o módulo
+Em **Admin → Permissões**, libere o Financeiro para quem vai usar (coordenadores
+do Horun já veem todos os módulos).
 
-```powershell
-cd C:\Horun                      # mesma pasta onde estão Horun-Core e RE7S-Horun
-git clone https://github.com/guimneves/Horun-Financeiro.git
-cd Horun-Financeiro
-copy .env.example .env
-notepad .env
+## Parte 3 — Preparar a pasta dos projetos
+
+Escolha uma pasta no computador onde o leitor vai rodar (por enquanto, o seu),
+por exemplo `C:\FinanceiroDrive`. Dentro dela, **uma pasta por projeto**,
+organizada como no OneDrive:
+
+```
+C:\FinanceiroDrive\
+   <pasta do projeto>\
+      0_Saldo por item\            ← a planilha de acompanhamento ("... Acompanhamento de saldo ...xlsx")
+      Material de consumo - Nacional\
+         Item 1 - <descrição>\
+            2024-1234 <título>\    ← uma pasta por compra: nº do processo COPPETEC + título
+               cotação, autorização, nota fiscal... (PDFs)
+      Equipamento e Material Permanente - Nacional\
+      Serviço\
+      ...
 ```
 
-No `.env`, preencha:
+O que o Financeiro reconhece sozinho:
+- **Categorias** pelo nome da pasta (as mesmas da planilha: Material de consumo, Equipamento, Serviço, Protótipo, Obras, Outros bens...).
+- **Itens** pelas pastas `Item N - descrição`.
+- **Compras** pelas pastas que começam com o nº do processo (`2024-1234`, `2024 1234`...). "(CANCELADO)" no nome = compra cancelada.
+- **Tipo de cada PDF** pelo nome (autorização de fornecimento, nota fiscal, cotação/proposta, boleto...).
+- **Valores** pela planilha de acompanhamento (a de "0_Saldo por item"), inclusive lançamentos sem nº de processo (DOA, ressarcimentos, passagens).
 
-- `POSTGRES_PASSWORD` — uma senha forte qualquer (fica só aqui).
-- `MODULE_SECRET_KEY` — gere com `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-- `MODULE_COORDENADOR_PASSWORD` — a senha mestra inicial de coordenador.
-- `BACKUP_DIR` — uma pasta do Windows fora do Docker (ex. `C:/HorunBackups/financeiro`).
-- Deixe `MODULE_DRIVE_MODE=agent` e `MODULE_DRIVE_AGENT_ROOT=financeiro`.
+Pastas fora desse padrão aparecem numa lista de "não reconhecidas" na hora de
+ler — nada é perdido nem alterado.
 
-```powershell
-docker compose up -d --build
-docker compose ps                # financeiro-backend e financeiro-frontend "healthy"
-```
+**Projetos novos podem ter diferenças** (nomes de pastas ou de abas da planilha
+diferentes). Teste cada projeto novo primeiro no `Apresentar_Financeiro.bat`;
+se algo não for reconhecido, mande os avisos da tela (sem valores) para ajustarmos.
 
-Libere a porta do agente no firewall do servidor (uma vez, PowerShell como administrador):
+## Parte 4 — Ligar o leitor de pastas no computador da pasta
 
-```powershell
-New-NetFirewallRule -DisplayName "Horun Financeiro - agente (8002)" -Direction Inbound -Protocol TCP -LocalPort 8002 -Action Allow
-```
+**4.1 Pedir um código de instalação.** No Horun, abra o Financeiro → aba
+**Organização** → **Gerar código de instalação**. O código vale 60 minutos e
+serve uma vez só.
 
-Conferência da porta estreita (de qualquer PC da rede): `curl http://<IP do servidor>:8002/agent/enroll-codes` deve responder **404**.
-
-## 2. Core: cadastrar o módulo
-
-Horun → **Admin → Módulos → Cadastrar módulo**:
-
-- Id: `financeiro` · Nome público: `Financeiro`
-- URL interna (backend): `http://financeiro-backend:8000`
-- URL interna (frontend): `http://financeiro-frontend:80`
-
-Depois, em **Permissões**, libere o módulo para quem vai usar (coordenadores do
-Core já veem todos os módulos). Opcional: **Notificações → gerar chave** e
-colocar `HORUN_NOTIFY_TOKEN=<chave>` no `.env` do Financeiro
-(`docker compose up -d` de novo).
-
-Abra o módulo pela barra lateral: deve carregar a lista de projetos (vazia).
-
-## 3. Código de instalação do agente
-
-No Financeiro, aba **Organização** → painel do Horun Agent → **Gerar código de instalação**.
-O código vale 60 minutos e serve uma vez.
-
-## 4. PC do OneDrive: instalar o Horun Agent
-
-Fora do OneDrive (para o próprio agente não ficar sincronizando):
+**4.2 Instalar o leitor** (no computador da pasta, fora do OneDrive):
 
 ```powershell
 mkdir C:\Horun; cd C:\Horun
@@ -75,56 +156,87 @@ copy config.example.json config.json
 notepad config.json
 ```
 
-`config.json` (troque o caminho pela pasta que **contém** as pastas dos projetos):
+**4.3 Dizer ao leitor onde está o servidor e qual pasta ele pode ler.** Apague
+o conteúdo do `config.json` e cole este, trocando as duas partes marcadas:
 
 ```json
 {
-  "device_name": "PC-ONEDRIVE-FINANCEIRO",
+  "device_name": "PC-PASTA-FINANCEIRO",
   "poll_interval_seconds": 3,
   "servers": [
     {
-      "url": "http://<IP do servidor>:8002",
-      "enroll_code": "<código do passo 3>",
+      "url": "http://192.168.31.80:8002",
+      "enroll_code": "<código do passo 4.1>",
       "device_token": "",
       "roots": {
-        "financeiro": { "path": "C:\\Users\\<usuário>\\OneDrive - IQ-UFRJ (1)\\Doutorado\\Programas\\Maturação artificial", "mode": "read" }
+        "financeiro": { "path": "C:\\FinanceiroDrive", "mode": "read" }
       }
     }
   ]
 }
 ```
 
-- O nome `financeiro` tem que ser igual a `MODULE_DRIVE_AGENT_ROOT` do servidor.
-- `"mode": "read"` — o Financeiro só lê o drive; o agente recusa qualquer escrita.
-- Se este PC já tem um agente para outro módulo, **não instale outro**: acrescente
-  este bloco em `servers` do `config.json` existente e reinicie o agente.
+- No caminho da pasta, use **duas barras** (`C:\\FinanceiroDrive`).
+- `"mode": "read"` = o leitor **só lê**: ele se recusa a gravar, apagar ou mover qualquer coisa.
+- Se este computador já tem um leitor para outro módulo (como o do Rock-Eval),
+  **não instale outro**: acrescente este bloco na lista `servers` do
+  `config.json` que já existe.
 
-Iniciar automaticamente a cada login (janela aberta, como no PC do Rock-Eval):
-siga `install/README.md` do Agent-Horun, opção **A** (atalho `.bat` na pasta
-Inicializar). Na primeira execução o agente troca o código pelo token (o
-`device_token` aparece preenchido no `config.json`).
+**4.4 Fazer o leitor abrir sozinho** sempre que o Windows iniciar (cria um
+atalho na pasta "Inicializar"):
 
-Cuidados: o PC não pode suspender; no OneDrive, marque a pasta dos projetos como
-**"Sempre manter neste dispositivo"** (arquivo só na nuvem não é lido); desligue
-o "Modo de Edição Rápida" da janela do agente.
+```powershell
+$bat = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Horun Agent.bat"
+Set-Content -Path $bat -Encoding ascii -Value @'
+@echo off
+title Horun Agent - NAO FECHE ESTA JANELA
+cd /d C:\Horun\Agent-Horun
+.venv\Scripts\python.exe -m agent
+pause
+'@
+```
 
-Conferência: em **Organização**, a instalação aparece com o "visto por último"
-de poucos segundos atrás; na aba **Drive** do projeto, **Verificar de novo** não
-acusa agente desligado.
+Dê dois cliques nesse atalho para ligar agora. Uma janela preta abre e deve
+ficar aberta — fechar a janela desliga o leitor.
 
-## 5. Carregar o projeto
+Na primeira vez, o leitor troca o código por uma "chave" permanente (o campo
+`device_token` do `config.json` aparece preenchido e o código some).
 
-No Financeiro (pelo Horun):
+**Cuidados:**
+- O computador **não pode entrar em suspensão** (Configurações → Sistema →
+  Energia → Suspender: Nunca). Desligar só a tela não tem problema.
+- Na janela do leitor: botão direito na barra de título → **Propriedades** →
+  desmarque **"Modo de Edição Rápida"**. Com ele ligado, um clique dentro da
+  janela **congela** o leitor até alguém apertar Enter.
+- Se a pasta estiver no OneDrive, marque-a como **"Sempre manter neste
+  dispositivo"** (arquivo que está só na nuvem não é lido).
 
-1. **+ Novo projeto** (código, nome, vigência).
-2. **Revisões → Importar orçamento da planilha** (envie a planilha de acompanhamento) e ative a revisão.
-3. **Equipe → Importar equipe da planilha** (a mesma planilha).
-4. **Configurações → pasta do drive**: o nome da pasta do projeto dentro de
-   "Maturação artificial".
-5. **Drive → Ler pastas → Sincronizar** (a planilha de "0_Saldo por item" é achada sozinha).
-6. **Configurações → parcelas** e membros do projeto.
+**4.5 Conferir.** No Financeiro → **Organização**, o computador aparece na
+lista com "visto por último" de poucos segundos atrás.
 
-## Atualizar depois
+## Parte 5 — Importar um projeto (o roteiro para demonstrar)
+
+No Financeiro, pelo Horun:
+
+1. **+ Novo projeto** — código, nome e datas de início e fim.
+2. **Revisões → Importar orçamento da planilha** — envie a planilha de
+   acompanhamento do projeto. Confira a prévia e clique para importar; depois,
+   **ative** a revisão.
+3. **Equipe → Importar equipe da planilha** — a mesma planilha.
+4. **Configurações → Pasta do drive** — o nome da pasta do projeto (só o nome,
+   ex. `<pasta do projeto>`, não o caminho inteiro).
+5. **Drive → Ler pastas** — o Financeiro mostra o que encontrou: compras a
+   criar, valores a preencher, pastas não reconhecidas. Nada é gravado ainda.
+6. **Sincronizar** — agora sim cria as compras e liga os PDFs a cada uma.
+7. **Configurações → Parcelas** e a aba **Membros** (quem participa do projeto).
+8. Abra o **Resumo** para mostrar o resultado.
+
+A planilha de "0_Saldo por item" é encontrada sozinha (deixe o campo vazio).
+Feche a planilha no Excel antes de sincronizar — aberta, o Windows não deixa ler.
+
+## Atualizar o Financeiro depois
+
+No servidor:
 
 ```powershell
 cd C:\Horun\Horun-Financeiro
@@ -132,5 +244,14 @@ git pull
 docker compose up -d --build
 ```
 
-O banco e os documentos ficam nos volumes `financeiro_pgdata` e
-`financeiro_uploads` (sobrevivem ao rebuild; só somem com `docker compose down -v`).
+O Financeiro fica fora do ar por um ou dois minutos; os dados continuam.
+
+## Se algo der errado
+
+| O que aparece | O que fazer |
+|---|---|
+| Financeiro "fora do ar" no Horun | Admin → Módulos → **editar**: a URL do backend tem que ser `http://financeiro-backend:8000` |
+| "Agente desligado" / Drive não responde | a janela do leitor está aberta no computador da pasta? O computador está ligado e sem suspender? |
+| Erro ao ler a planilha | a planilha está aberta no Excel — feche e tente de novo |
+| Pastas "não reconhecidas" | o nome não segue o padrão da Parte 3 — renomeie na cópia ou mande o aviso para ajustarmos |
+| Qualquer outra coisa | no servidor, na pasta do Financeiro: `docker compose logs --tail 30 financeiro-backend` e mande o resultado |
