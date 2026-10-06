@@ -77,6 +77,13 @@ export interface PurchaseDocument {
   note: string | null
   uploaded_by_username: string
   uploaded_at: string
+  /** Cópia do anexo na pasta do processo no drive: "" (não se aplica) |
+   * "pendente" (espera o drive/agente) | "copiado" | "erro" (motivo em drive_copy_error) */
+  drive_copy_status: '' | 'pendente' | 'copiado' | 'erro'
+  drive_copy_error: string | null
+  drive_copy_path: string | null
+  /** Só na resposta do envio: aviso sobre o nº lido da autorização de fornecimento */
+  warning?: string | null
 }
 
 export type TransitionAction =

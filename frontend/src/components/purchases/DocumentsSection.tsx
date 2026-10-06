@@ -18,6 +18,7 @@ interface DocumentsSectionProps {
 export function DocumentsSection({ projectId, processId, canDelete, canUpload, onChange }: DocumentsSectionProps) {
   const [docs, setDocs] = useState<PurchaseDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [uploadingType, setUploadingType] = useState<string | null>(null)
   // documento aberto no leitor (sem baixar)
   const [viewing, setViewing] = useState<PurchaseDocument | null>(null)
@@ -37,9 +38,13 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
   async function handleUpload(docType: string, file: File) {
     setUploadingType(docType)
     setError(null)
+    setNotice(null)
     try {
-      await purchasesApi.uploadDocument(projectId, processId, docType, file)
+      const sent = await purchasesApi.uploadDocument(projectId, processId, docType, file)
+      if (sent.warning) setNotice(sent.warning)
       load()
+      // a cópia para a pasta do drive é feita logo depois do envio
+      if (sent.drive_copy_status === 'pendente') window.setTimeout(load, 4000)
       onChange?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao enviar arquivo.')
@@ -83,6 +88,11 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
   return (
     <div>
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {notice && (
+        <p className="mb-2 rounded-md px-3 py-2 text-sm" style={{ background: '#fef9c3', color: '#854d0e' }}>
+          {notice}
+        </p>
+      )}
       {shownTypes.map((docType) => {
         const items = byType.get(docType) ?? []
         const isQuote = docType === 'cotacao'
@@ -146,6 +156,7 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                           · drive
                         </span>
                       )}
+                      <DriveCopyBadge doc={doc} />
                     </span>
                     <span className="flex items-center gap-2 sm:shrink-0">
                       <a
@@ -175,7 +186,11 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
                           onClick={() => handleDelete(doc.id)}
                           className="text-xs"
                           style={{ color: '#b91c1c' }}
-                          title={doc.storage_kind === 'drive' ? 'Só desfaz o vínculo; o arquivo do drive não é apagado' : undefined}
+                          title={
+                            doc.storage_kind === 'drive' || doc.drive_copy_status === 'copiado'
+                              ? 'O arquivo continua na pasta do drive (o programa nunca apaga nada lá)'
+                              : undefined
+                          }
                         >
                           {doc.storage_kind === 'drive' ? 'desvincular' : 'remover'}
                         </button>
@@ -198,4 +213,36 @@ export function DocumentsSection({ projectId, processId, canDelete, canUpload, o
       )}
     </div>
   )
+}
+
+/** Se o arquivo está na pasta do processo no drive. Os do tipo "drive" já
+ * estão lá; os anexados são copiados (quando a escrita no drive está ligada). */
+function DriveCopyBadge({ doc }: { doc: PurchaseDocument }) {
+  const inFolder = doc.storage_kind === 'drive' || doc.drive_copy_status === 'copiado'
+  if (inFolder) {
+    return (
+      <span className="ml-1 text-xs" style={{ color: '#166534' }} title={doc.drive_copy_path ?? 'Na pasta do processo no drive'}>
+        · na pasta ✓
+      </span>
+    )
+  }
+  if (doc.drive_copy_status === 'pendente') {
+    return (
+      <span className="ml-1 text-xs" style={{ color: 'var(--color-text-muted)' }} title={doc.drive_copy_error ?? undefined}>
+        · aguardando o leitor de pastas
+      </span>
+    )
+  }
+  if (doc.drive_copy_status === 'erro') {
+    return (
+      <span
+        className="ml-1 block whitespace-normal text-xs sm:inline"
+        style={{ color: '#b91c1c' }}
+        title={doc.drive_copy_error ?? undefined}
+      >
+        · não copiado: {doc.drive_copy_error ?? 'erro desconhecido'}
+      </span>
+    )
+  }
+  return null
 }

@@ -45,6 +45,23 @@ export interface DriveStatus {
   project_folder: string | null
   available: boolean
   message: string | null
+  /** MODULE_DRIVE_WRITE: anexos são copiados para a pasta do processo no drive */
+  write_enabled: boolean
+  auto_sync: AutoSync | null
+}
+
+/** Sincronização automática com o drive (a cada N minutos, no servidor). */
+export interface AutoSync {
+  enabled: boolean
+  interval_minutes: number
+  last_run_at: string | null
+  /** ok | parcial | pulada | erro */
+  last_status: string
+  last_message: string
+  new_files: number
+  new_processes: number
+  copies: number
+  error: string | null
 }
 
 export interface DriveEntry {

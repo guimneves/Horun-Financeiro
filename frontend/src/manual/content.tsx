@@ -198,11 +198,16 @@ export const MANUAL_SECTIONS: ManualSection[] = [
             Arquivo no tipo errado? Troque o tipo na listinha ao lado dele — fica registrado no histórico.
           </li>
           <li>
-            <strong>remover</strong> apaga um arquivo enviado (só quem enviou ou o coordenador).{' '}
-            <strong>desvincular</strong> aparece nos arquivos marcados "drive": só tira o vínculo, o arquivo continua
-            no drive.
+            <strong>remover</strong> tira um arquivo enviado do programa (só quem enviou ou o coordenador).{' '}
+            <strong>desvincular</strong> aparece nos arquivos marcados "drive": só tira o vínculo. Nos dois casos o
+            arquivo que estiver na pasta do drive <strong>continua lá</strong> e não volta a ser vinculado sozinho.
           </li>
           <li>Em processo concluído, cancelado ou rejeitado os documentos ficam guardados e não podem ser removidos.</li>
+          <li>
+            Ao anexar a <strong>autorização de fornecimento</strong> (AF) da COPPETEC, o programa lê o nº do processo
+            impresso nela ("Autorização de compra AAAA/N") e preenche sozinho, se o processo ainda não tiver nº. Se o
+            processo já tiver outro nº, nada é trocado: aparece um aviso.
+          </li>
         </Bullets>
       </>
     ),
@@ -380,8 +385,30 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     body: (
       <>
         <p>
-          O módulo <strong>só lê</strong> a pasta do projeto no drive — nunca grava, move ou apaga arquivos lá.
+          O programa e a pasta do projeto no drive ficam <strong>sincronizados nos dois sentidos</strong>:
         </p>
+        <Bullets>
+          <li>
+            <strong>Da pasta para o programa</strong>: de tempos em tempos (em geral a cada 30 minutos) o programa lê
+            as pastas sozinho — pastas de processo, arquivos e valores novos aparecem sem ninguém clicar. A tela
+            Drive mostra "Sincronização automática: última às …".
+          </li>
+          <li>
+            <strong>Do programa para a pasta</strong> (quando o servidor está configurado para gravar): todo documento
+            anexado num processo também é gravado na pasta dele no drive. Ao lado de cada documento aparece{' '}
+            <strong>na pasta ✓</strong>, <strong>aguardando o leitor de pastas</strong> (o PC com o OneDrive está
+            desligado — grava assim que ele voltar) ou <strong>não copiado</strong>, com o motivo.
+          </li>
+          <li>
+            Processo ainda sem nº ganha uma pasta <strong>SEM NUMERO dd-mm-aaaa título</strong> dentro do item. Quando
+            o nº é informado, os arquivos passam para a pasta <strong>AAAA-N título</strong>.
+          </li>
+          <li>
+            O programa <strong>nunca apaga nem substitui</strong> arquivos no drive: com nome repetido, grava "nome
+            (2).pdf". Remover um documento no programa não apaga o arquivo da pasta.
+          </li>
+        </Bullets>
+        <p>Para sincronizar na hora, sem esperar:</p>
         <Steps>
           <li>
             Em <strong>Drive</strong>, clique em <strong>Ler pastas</strong>. O programa mostra o que encontrou e o que

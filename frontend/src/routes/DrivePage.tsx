@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import { driveApi } from '../api/drive'
-import type { DriveBrowse, DriveStatus, ScanReport, SyncResult } from '../types/drive'
+import type { AutoSync, DriveBrowse, DriveStatus, ScanReport, SyncResult } from '../types/drive'
 import { PURCHASE_STATUS_LABELS } from '../types/purchase'
 import { MoneyValue } from '../components/common/MoneyValue'
 import { FilePreviewModal, previewKind } from '../components/common/FilePreviewModal'
@@ -101,7 +101,10 @@ export function DrivePage() {
         Drive do projeto
       </h2>
       <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        Pasta: {status.project_folder}. O programa só lê o drive — nunca grava, move ou apaga arquivos nele.
+        Pasta: {status.project_folder}.{' '}
+        {status.write_enabled
+          ? 'Os documentos anexados nos processos também são gravados na pasta de cada processo — o programa nunca sobrescreve nem apaga arquivos no drive.'
+          : 'O programa só lê o drive — nunca grava, move ou apaga arquivos nele.'}
         {status.mode === 'agent' && (
           <>
             {' '}
@@ -110,9 +113,35 @@ export function DrivePage() {
           </>
         )}
       </p>
+      {status.auto_sync && <AutoSyncLine info={status.auto_sync} />}
       {isCoordenador && <SyncPanel projectId={project.id} />}
       <Browser projectId={project.id} />
     </div>
+  )
+}
+
+function AutoSyncLine({ info }: { info: AutoSync }) {
+  if (!info.enabled) {
+    return (
+      <p className="mb-4 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        Sincronização automática desligada — use <strong>Ler pastas</strong> e <strong>Sincronizar</strong>.
+      </p>
+    )
+  }
+  const when = info.last_run_at
+    ? new Date(info.last_run_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : null
+  const news =
+    info.new_files || info.new_processes
+      ? `${info.new_files} arquivo(s) novo(s)${info.new_processes ? `, ${info.new_processes} processo(s) novo(s)` : ''}`
+      : 'nada novo'
+  return (
+    <p className="mb-4 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+      Sincronização automática a cada {info.interval_minutes} min:{' '}
+      {when ? `última às ${when} — ${news}.` : 'ainda não rodou.'}
+      {info.error && <span style={{ color: '#b91c1c' }}> Problema neste projeto: {info.error}</span>}
+      {info.last_status === 'pulada' && info.last_message && <> {info.last_message}</>}
+    </p>
   )
 }
 
