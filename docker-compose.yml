@@ -66,6 +66,8 @@ services:
       HORUN_DEV_MODE: "false"
       MODULE_DATABASE_URL: postgresql+psycopg://financeiro:${POSTGRES_PASSWORD}@financeiro-db:5432/financeiro
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY}
+      # Opcional e sem efeito aqui: no servidor o papel vem do cargo no Horun
+      # (X-Horun-Level); a senha mestra só existe no desenvolvimento.
       MODULE_COORDENADOR_PASSWORD: ${MODULE_COORDENADOR_PASSWORD:-}
       MODULE_UPLOAD_ROOT: /data/uploads
       MODULE_MAX_UPLOAD_MB: ${MODULE_MAX_UPLOAD_MB:-50}

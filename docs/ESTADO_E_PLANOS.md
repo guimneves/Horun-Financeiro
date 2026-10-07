@@ -124,7 +124,7 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`** (única desde 06/10/2026): **254 testes** do backend passam;
+- **`master`** (única desde 06/10/2026): **268 testes** do backend passam;
   frontend compila e passa no lint. Inclui o modo agente do drive (a
   `wip/drive-agent` foi incorporada) e a configuração de produção:
   `docker-compose.yml` (Postgres, backup, porta 8002 do agente) e o passo a
@@ -136,6 +136,10 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
   autorização de fornecimento, sincronização automática a cada
   `MODULE_DRIVE_AUTO_SYNC_MINUTES` (padrão 30). Ainda não testada com o
   agente real em "read-write".
+- **Papéis pelo cargo no Horun** (06/10/2026, decisão 14): atrás do Core não há
+  senha de coordenador nem cadastro de membros para entrar; o cabeçalho mostra
+  o papel e "← Voltar ao Horun". A senha mestra e o "Ver como" seguem só no
+  modo DEV (o `.bat`).
 - **Apresentação local**: `Programas/Horun/Apresentar_Financeiro.bat` (fora do
   repositório) roda a `master` em modo DEV com o drive local e a base em
   `C:\HorunDemo\Financeiro`. Reabrir o .bat a cada mudança; a planilha precisa
@@ -183,6 +187,22 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
     lido da autorização de fornecimento ("AUTORIZAÇÃO DE COMPRA AAAA/N") e
     nunca sobrescreve um nº já cadastrado. Arquivo desvinculado no módulo não
     volta a ser vinculado pela sincronização (`DriveUnlinkedPath`).
+14. **Papéis vêm do cargo no Horun no modo módulo; senha mestra só no
+    desenvolvimento** (06/10/2026 — pedido do mantenedor: "a senha de
+    coordenador no módulo só atrapalha"). Fora do `HORUN_DEV_MODE`, o
+    `X-Horun-Level` do Core decide: 1 (administrador máximo) e 2
+    (coordenador/a) são coordenador em TODOS os projetos; 3–5 (e quem chega
+    sem nível) são colaborador em todos — todos veem todos os projetos,
+    colaborador sem R$. Sem `X-Horun-Level` (Core antigo), `X-Horun-Role`
+    "admin" vale nível 2. A senha mestra é ignorada (rotas de senha
+    respondem 409). `ProjectMembership` passa a ser só "participantes do
+    projeto": os marcados como coordenador recebem os avisos; sem nenhum, o
+    aviso vai aos níveis 1–2 do Core. No DEV_MODE (`Apresentar_Financeiro.bat`)
+    tudo segue como antes (membros + senha mestra + "Ver como"). Sem
+    variável nova: o critério é só `HORUN_DEV_MODE` (`module_mode()` em
+    `core/permissions.py`) — só 12 testes dependiam do esquema antigo e
+    passaram a usar o fixture `dev_mode`. A mesma lógica deve ir para
+    Reagentes e Amostras.
 
 ## 7. Modo agente — divisão de trabalho e o que falta
 
@@ -330,7 +350,7 @@ sem documentos de projeto; sem câmbio; concorrência sem controle; sem paginaç
 1. `git clone https://github.com/guimneves/Horun-Financeiro` e
    `git switch wip/drive-agent` (para continuar o modo agente) ou fique em `master`.
 2. Ler, nesta ordem: `CLAUDE.md`, este arquivo, `CHANGELOG.md`, `AGENT_CONTRACT.md`.
-3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **254 passed**.
+3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **268 passed**.
 4. As memórias da sessão original ficam fora do repositório (no perfil do
    Claude Code da conta antiga); o essencial delas está na seção 1 e 6 acima.
 5. Contexto externo: `Programas/Horun Core` (design-system e plataforma),

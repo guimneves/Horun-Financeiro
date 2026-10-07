@@ -6,10 +6,43 @@ sessão de trabalho iniciada em 29/09/2026. Para o estado atual, decisões e
 plano, ver [`ESTADO_E_PLANOS.md`](ESTADO_E_PLANOS.md).
 
 Desde 06/10/2026 há uma branch só, a `master` (o modo agente, antes na
-`wip/drive-agent`, foi incorporado): 254 testes do backend passam; frontend
+`wip/drive-agent`, foi incorporado): 268 testes do backend passam; frontend
 compila (`tsc -b`) e passa no lint.
 
 ---
+
+## 06/10/2026 — Papéis pelo cargo no Horun (sem senha de coordenador no módulo)
+
+Pedido do mantenedor: "a senha de coordenador no módulo só atrapalha". Ver a
+decisão 14 em `ESTADO_E_PLANOS.md`.
+
+- **Modo módulo** (fora do `HORUN_DEV_MODE`, `core/permissions.py`): o papel
+  vem do cargo no Horun (`X-Horun-Level`, lido em `core/identity.py`; sem ele,
+  `X-Horun-Role` "admin" = nível 2, o resto = 5). Administrador máximo e
+  coordenadores (níveis 1–2) são coordenador em todos os projetos; os demais,
+  colaborador em todos (sem valores em R$). Não precisa estar na lista de
+  membros: todos veem todos os projetos. O papel é um objeto solto, nunca
+  gravado. Projeto inexistente: 404.
+- **Senha mestra só no desenvolvimento**: no modo módulo o token é ignorado e
+  `/auth/coordenador-session` e `/auth/coordenador-password` respondem 409.
+  `MODULE_COORDENADOR_PASSWORD` fica opcional (`.env.example`,
+  `docker-compose.yml`, `DEPLOY.md`, `README.md`). No DEV_MODE
+  (`Apresentar_Financeiro.bat`) nada muda: membros, senha e "Ver como".
+- **Membros = participantes e destinatários dos avisos**: a tela explica que a
+  lista não dá acesso. Sem coordenador marcado no projeto, os avisos "aos
+  coordenadores" vão para os níveis 1–2 do Core (`levels` do `notify()`).
+- `/api/auth/me` informa `level`, `dev_mode`, `roles_from_core` e
+  `module_role`.
+- **Tela**: sem o botão "Entrar como coordenador" no modo módulo; o cabeçalho
+  mostra o papel ("Coordenador(a)"/"Colaborador(a)", com o nome no
+  computador); "Organização" aparece para coordenadores pelo cargo (sem a
+  troca de senha, só o painel do agente); link **← Voltar ao Horun** quando
+  roda sob o Core (`/m/...`) — no celular, dentro da gaveta.
+- Manual: "Quem pode fazer o quê" pelo cargo, Membros como destinatários dos
+  avisos, senha de coordenador descrita só para o computador de
+  desenvolvimento.
+- 14 testes novos (`tests/test_core_roles.py`, 268 no total); os 12 testes do
+  esquema antigo passam a rodar com o fixture `dev_mode`.
 
 ## 06/10/2026 — Drive e módulo sincronizados nos dois sentidos
 

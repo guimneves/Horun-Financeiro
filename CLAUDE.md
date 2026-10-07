@@ -39,12 +39,18 @@ financiados). Backend FastAPI+SQLModel (`backend/`), frontend React+Vite (`front
 ## Comandos
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q        # master: 254 passam
+cd backend && .venv/Scripts/python -m pytest -q        # master: 268 passam
 cd frontend && npx tsc -b && npx oxlint
 ```
 
-Testes não usam `HORUN_DEV_MODE` (simulam usuários por cabeçalho) e gravam uploads
-numa pasta temporária.
+Testes não usam `HORUN_DEV_MODE` (simulam usuários por cabeçalho, como atrás do
+Core) e gravam uploads numa pasta temporária. O esquema de desenvolvimento
+(membros + senha mestra) é testado com o fixture `dev_mode` (`tests/conftest.py`).
+
+**Papéis** (decisão de 06/10/2026, `core/permissions.py`): atrás do Core o papel
+vem do cargo no Horun (`X-Horun-Level` 1–2 = coordenador em todo projeto; demais =
+colaborador); `ProjectMembership` só define quem recebe os avisos. Membros que dão
+acesso e senha mestra: só com `HORUN_DEV_MODE=true`.
 
 ## Estado
 

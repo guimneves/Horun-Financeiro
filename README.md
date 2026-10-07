@@ -32,7 +32,7 @@ Com `HORUN_DEV_MODE=true`, o backend usa um usuário fixo (admin de desenvolvime
 ## Plugando no Horun (quando estiver pronto)
 
 1. Remover `HORUN_DEV_MODE` do ambiente de produção — o backend passa a exigir identidade vinda do Core.
-2. Definir as variáveis de `.env.example` — em especial `MODULE_SECRET_KEY` (obrigatória fora do modo dev; o módulo não sobe sem ela) e `MODULE_COORDENADOR_PASSWORD` (senha mestra inicial de coordenador; não existe senha padrão).
+2. Definir as variáveis de `.env.example` — em especial `MODULE_SECRET_KEY` (obrigatória fora do modo dev; o módulo não sobe sem ela) (`MODULE_COORDENADOR_PASSWORD` é opcional: atrás do Horun Core o papel vem do cargo no Horun — administrador máximo e coordenadores coordenam, os demais colaboram; a senha mestra só existe no desenvolvimento).
 3. Adicionar o serviço deste módulo ao `docker-compose.yml` do servidor (backend sem porta exposta ao host — só alcançável pelo Core, mesma regra do RE7S).
 4. Cadastrar o módulo no painel de Administração do Core, a partir dos dados do `MODULE.md` (o cadastro é manual).
 
