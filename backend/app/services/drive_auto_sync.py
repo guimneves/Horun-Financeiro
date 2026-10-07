@@ -124,7 +124,13 @@ def sync_projects(session: Session) -> dict[int, dict]:
     from app.api.routes_drive import PlanError, build_sync_plan
 
     detail: dict[int, dict] = {}
-    projects = session.exec(select(Project).where(Project.drive_folder.is_not(None))).all()  # type: ignore[union-attr]
+    # Projetos arquivados ficam de fora (decisão de 07/10/2026).
+    projects = session.exec(
+        select(Project).where(
+            Project.drive_folder.is_not(None),  # type: ignore[union-attr]
+            Project.archived_at.is_(None),  # type: ignore[union-attr]
+        )
+    ).all()
     for project in projects:
         if not (project.drive_folder or "").strip():
             continue

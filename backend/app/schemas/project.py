@@ -26,6 +26,8 @@ class ProjectOut(BaseModel):
     active_revision_id: int | None
     drive_folder: str | None = None
     balance_policy: str = "bloquear"
+    archived_at: datetime | None = None  # arquivado: fora da lista e da sincronização automática
+    archived_by: str | None = None
     my_role: str | None = None  # papel do usuário autenticado neste projeto
 
 
@@ -51,3 +53,7 @@ class MembershipOut(BaseModel):
     username: str
     role: str
     created_at: datetime
+
+
+class ProjectDeleteConfirm(BaseModel):
+    confirm_code: str = ""  # o código do projeto, digitado para confirmar a exclusão

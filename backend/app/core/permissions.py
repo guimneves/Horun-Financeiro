@@ -26,7 +26,7 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core import identity as identity_module
-from app.core.identity import LEVEL_COORDENADOR, HorunIdentity, get_identity
+from app.core.identity import LEVEL_ADMIN, LEVEL_COORDENADOR, HorunIdentity, get_identity
 from app.core.security import verify_coordenador_token
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
@@ -90,5 +90,16 @@ def require_core_admin(identity: HorunIdentity = Depends(get_identity)) -> Horun
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Só o administrador máximo do Horun pode criar um projeto novo.",
+        )
+    return identity
+
+
+def require_super_admin(identity: HorunIdentity = Depends(get_identity)) -> HorunIdentity:
+    """Só o administrador máximo do Horun (nível 1) — hoje, para excluir um
+    projeto (decisão de 07/10/2026). Coordenador(a) (nível 2) não basta."""
+    if identity.level != LEVEL_ADMIN:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Só o administrador máximo do Horun pode excluir um projeto.",
         )
     return identity

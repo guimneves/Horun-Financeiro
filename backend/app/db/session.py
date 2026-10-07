@@ -88,6 +88,9 @@ def _run_migrations() -> None:
     _ensure_column("document", "drive_copy_status", "VARCHAR DEFAULT ''")
     _ensure_column("document", "drive_copy_error", "VARCHAR")
     _ensure_column("purchaseprocess", "drive_rename_pending", "BOOLEAN DEFAULT FALSE")
+    # arquivar projeto (07/10/2026)
+    _ensure_column("project", "archived_at", "TIMESTAMP")
+    _ensure_column("project", "archived_by", "VARCHAR")
     # colunas novas das tabelas do agente (pacote único — ver app/agent_server)
     for table, column, ddl_type in AGENT_MIGRATIONS:
         _ensure_column(table, column, ddl_type)

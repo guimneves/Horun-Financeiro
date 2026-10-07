@@ -45,6 +45,11 @@ class Project(SQLModel, table=True):
     # recusa a operação; "avisar" deixa passar e devolve um aviso. Cada
     # projeto escolhe — o programa não impõe uma política única.
     balance_policy: str = "bloquear"
+    # Projeto arquivado (decisão de 07/10/2026): some da lista de projetos e
+    # da sincronização automática com o drive, mas todos os dados ficam e
+    # continuam abertos para leitura; desarquivar volta tudo ao normal.
+    archived_at: datetime | None = None
+    archived_by: str | None = None  # username de quem arquivou
     created_at: datetime = Field(default_factory=_utcnow)
 
 
