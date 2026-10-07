@@ -6,10 +6,37 @@ sessão de trabalho iniciada em 29/09/2026. Para o estado atual, decisões e
 plano, ver [`ESTADO_E_PLANOS.md`](ESTADO_E_PLANOS.md).
 
 Desde 06/10/2026 há uma branch só, a `master` (o modo agente, antes na
-`wip/drive-agent`, foi incorporado): 268 testes do backend passam; frontend
+`wip/drive-agent`, foi incorporado): 279 testes do backend passam; frontend
 compila (`tsc -b`) e passa no lint.
 
 ---
+
+## 07/10/2026 — Arquivar/desarquivar e excluir projeto
+
+Decisão do mantenedor: "Implemente excluir (só para o administrador máximo) e
+arquivar/desarquivar."
+
+- **Arquivar** (coordenador): `POST /api/projects/{id}/archive` e
+  `/unarchive`, com evento no histórico (`projeto_arquivado` /
+  `projeto_desarquivado`). Colunas novas `project.archived_at` e
+  `archived_by` (`_ensure_column`). `GET /api/projects` esconde os
+  arquivados (`?include_archived=true` traz todos, nos dois esquemas de
+  papéis); o projeto continua abrindo pelo id e a sincronização automática
+  com o drive o pula (a escrita pendente no drive continua sendo refeita).
+- **Excluir** (só o administrador máximo, nível 1 — `require_super_admin`):
+  `DELETE /api/projects/{id}` com `{"confirm_code": "<código>"}` (422 se não
+  conferir). Apaga tudo do projeto numa transação, em ordem segura para as
+  chaves estrangeiras (documentos, compras com a cadeia de tentativas,
+  equipe, itens, revisões, posições, parcelas, membros, desvinculados,
+  histórico); os anexos enviados ao servidor saem do disco depois do commit.
+  O drive nunca é tocado. Fica um `logger.warning` com o código e quem
+  excluiu, já que o histórico do projeto vai junto.
+- **Frontend**: lista com "Mostrar arquivados (N)" e selo "Arquivado"; aviso
+  amarelo no topo de um projeto arquivado; em Configurações, "Arquivar
+  projeto"/"Desarquivar projeto" e, só para o nível 1, a seção vermelha
+  "Excluir projeto" (digitar o código libera o botão). Manual atualizado.
+- 11 testes novos (`tests/test_project_archive_delete.py`, 279 no total); o
+  teste da exclusão liga as chaves estrangeiras no SQLite, como no Postgres.
 
 ## 06/10/2026 — Papéis pelo cargo no Horun (sem senha de coordenador no módulo)
 

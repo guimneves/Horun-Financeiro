@@ -124,7 +124,7 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
 
 ## 5. Estado atual por branch
 
-- **`master`** (única desde 06/10/2026): **268 testes** do backend passam;
+- **`master`** (única desde 06/10/2026): **279 testes** do backend passam;
   frontend compila e passa no lint. Inclui o modo agente do drive (a
   `wip/drive-agent` foi incorporada) e a configuração de produção:
   `docker-compose.yml` (Postgres, backup, porta 8002 do agente) e o passo a
@@ -140,6 +140,10 @@ Pasta do projeto no OneDrive (projeto 25465, "Maturação Artificial"):
   senha de coordenador nem cadastro de membros para entrar; o cabeçalho mostra
   o papel e "← Voltar ao Horun". A senha mestra e o "Ver como" seguem só no
   modo DEV (o `.bat`).
+- **Arquivar e excluir projeto** (07/10/2026): coordenador arquiva/desarquiva
+  (some da lista e da sincronização automática, dados mantidos); só o
+  administrador máximo (nível 1) exclui, digitando o código — apaga tudo do
+  projeto no Financeiro e os anexos do servidor, nunca o drive.
 - **Apresentação local**: `Programas/Horun/Apresentar_Financeiro.bat` (fora do
   repositório) roda a `master` em modo DEV com o drive local e a base em
   `C:\HorunDemo\Financeiro`. Reabrir o .bat a cada mudança; a planilha precisa
@@ -350,7 +354,7 @@ sem documentos de projeto; sem câmbio; concorrência sem controle; sem paginaç
 1. `git clone https://github.com/guimneves/Horun-Financeiro` e
    `git switch wip/drive-agent` (para continuar o modo agente) ou fique em `master`.
 2. Ler, nesta ordem: `CLAUDE.md`, este arquivo, `CHANGELOG.md`, `AGENT_CONTRACT.md`.
-3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **268 passed**.
+3. Instalar e rodar a suíte (seção 3). Na `master` deve dar **279 passed**.
 4. As memórias da sessão original ficam fora do repositório (no perfil do
    Claude Code da conta antiga); o essencial delas está na seção 1 e 6 acima.
 5. Contexto externo: `Programas/Horun Core` (design-system e plataforma),
