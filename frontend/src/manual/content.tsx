@@ -120,7 +120,13 @@ export const MANUAL_SECTIONS: ManualSection[] = [
             um item do Orçamento há o mesmo botão, já com o item escolhido.)
           </li>
           <li>
-            Em <strong>Item de orçamento</strong>, escolha o item que vai pagar a compra.
+            Em <strong>1. Tipo de despesa</strong>, escolha o tipo (ex.: "Material de Consumo — Nacional"). Só aparecem
+            os tipos que os coordenadores liberaram para compras.
+          </li>
+          <li>
+            Em <strong>2. Item</strong>, clique no item que vai pagar a compra. A caixa de busca acha o item pelo nº ou
+            por uma palavra da descrição; ao lado de cada item aparece o saldo (para colaboradores, só "há saldo" ou
+            "sem saldo").
           </li>
           <li>
             Preencha <strong>Título / descrição da compra</strong>, <strong>Quantidade</strong> e{' '}
@@ -140,6 +146,37 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           processo não é criado (reduza o valor ou escolha outro item); em "Só avisar" ele é criado com um aviso e o
           saldo do item fica negativo.
         </Tip>
+        <Tip>
+          Apareceu "Nenhum tipo de despesa está liberado para compras" (ou o tipo que você precisa não está na
+          lista)? Peça a um coordenador do projeto para liberá-lo em <strong>Orçamento</strong>.
+        </Tip>
+      </>
+    ),
+  },
+  {
+    id: 'achar-compra',
+    title: 'Como achar uma compra na lista',
+    body: (
+      <>
+        <p>
+          Cada cartão em <strong>Compras</strong> mostra, acima do título, o tipo de despesa e o item que paga a compra
+          (ex.: "Material de Consumo — Nacional · Item 3 — Reagentes diversos"); abaixo, o fornecedor e o nº do
+          processo.
+        </p>
+        <Bullets>
+          <li>
+            Filtre por <strong>tipo de despesa</strong> e, depois, pelo <strong>item</strong> desse tipo.
+          </li>
+          <li>
+            Filtre pela <strong>situação</strong> (etapa) — escolher "Concluído" ou "Cancelado" mostra esses processos
+            mesmo com <strong>Mostrar concluídos/cancelados/rejeitados</strong> desmarcado.
+          </li>
+          <li>
+            A busca procura no título, no fornecedor e no nº do processo. <strong>limpar filtros</strong> volta à lista
+            inteira.
+          </li>
+          <li>Os filtros ficam no endereço da página: ao voltar de um processo, ou ao enviar o link, a lista é a mesma.</li>
+        </Bullets>
       </>
     ),
   },
@@ -320,6 +357,39 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           cada categoria, preencha e clique em <strong>salvar</strong>; quando terminar, clique em{' '}
           <strong>Ativar orçamento</strong>. Até lá, os saldos continuam pela versão anterior.
         </p>
+      </>
+    ),
+  },
+  {
+    id: 'liberar-compras',
+    title: 'Liberar tipos de despesa para compra (coordenador)',
+    body: (
+      <>
+        <p>
+          Os coordenadores decidem em quais tipos de despesa do orçamento a equipe pode abrir compras novas. Todos
+          começam liberados.
+        </p>
+        <Steps>
+          <li>
+            Vá em <strong>Orçamento</strong>. Em cada tipo de despesa (a linha da categoria) há a caixa{' '}
+            <strong>Compra liberada</strong>.
+          </li>
+          <li>
+            Desmarque para fechar o tipo para compras novas (o módulo pede confirmação); marque de novo para liberar.
+          </li>
+        </Steps>
+        <Bullets>
+          <li>
+            Num tipo fechado ninguém abre compra nova — nem o coordenador, que só precisa liberar antes. Ele some da
+            lista <strong>1. Tipo de despesa</strong> da janela de nova compra.
+          </li>
+          <li>As compras já abertas nesse tipo continuam normalmente (etapas, documentos, edição).</li>
+          <li>
+            Quem tenta abrir compra num tipo fechado vê o aviso "Este tipo de despesa não está liberado para compras".
+          </li>
+          <li>A Equipe Executora não usa compras e não tem a caixa.</li>
+          <li>Cada mudança fica registrada no histórico do projeto, com quem fez.</li>
+        </Bullets>
       </>
     ),
   },

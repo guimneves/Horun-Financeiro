@@ -23,6 +23,20 @@ export interface Category {
   is_personnel: boolean
 }
 
+/** Tipo de despesa e se está liberado para compras novas neste projeto */
+export interface PurchaseCategory {
+  category: string
+  label: string
+  group: 'capital' | 'corrente'
+  is_personnel: boolean
+  /** liberado pelos coordenadores (Equipe Executora: sempre false) */
+  open: boolean
+  /** itens da revisão ativa neste tipo de despesa */
+  item_count: number
+  updated_by: string | null
+  updated_at: string | null
+}
+
 export interface Revision {
   id: number
   project_id: number

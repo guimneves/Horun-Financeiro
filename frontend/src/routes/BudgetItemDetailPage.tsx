@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { budgetApi } from '../api/budget'
 import { purchasesApi } from '../api/purchases'
-import type { ItemBalance } from '../types'
+import type { ItemBalance, PurchaseCategory } from '../types'
 import type { PurchaseProcess } from '../types/purchase'
 import { TERMINAL_STATUSES } from '../types/purchase'
 import { MoneyValue } from '../components/common/MoneyValue'
@@ -23,11 +23,16 @@ export function BudgetItemDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [showFinished, setShowFinished] = useState(true)
+  const [purchaseCategories, setPurchaseCategories] = useState<PurchaseCategory[]>([])
 
   const load = useCallback(() => {
     budgetApi
       .balance(project.id)
       .then((rows) => setItem(rows.find((r) => r.position_id === posId) ?? null))
+      .catch((err) => setError(err.message))
+    budgetApi
+      .purchaseCategories(project.id)
+      .then(setPurchaseCategories)
       .catch((err) => setError(err.message))
     purchasesApi
       .list(project.id, { positionId: posId })
@@ -42,6 +47,9 @@ export function BudgetItemDetailPage() {
   if (error) return <p className="p-6 text-red-600">Erro ao carregar item: {error}</p>
   if (item === null || processes === null) return <p className="p-6">Carregando…</p>
 
+  const categoryState = purchaseCategories.find((c) => c.category === item.category)
+  // tipo de despesa fechado pelos coordenadores: não aceita compra nova
+  const purchaseClosed = categoryState !== undefined && !categoryState.open
   const visibleProcesses = processes.filter((p) => showFinished || !TERMINAL_STATUSES.has(p.status))
 
   return (
@@ -57,7 +65,7 @@ export function BudgetItemDetailPage() {
 
       <div className="mb-6 rounded-lg border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}>
         <div className="mb-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-          {item.category} · Item Nº{item.item_number}
+          {categoryState?.label ?? item.category} · Item Nº{item.item_number}
         </div>
         <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           {item.description}
@@ -102,14 +110,21 @@ export function BudgetItemDetailPage() {
             <input type="checkbox" checked={showFinished} onChange={(e) => setShowFinished(e.target.checked)} />
             Mostrar concluídos/cancelados/rejeitados
           </label>
-          <button
-            type="button"
-            onClick={() => setShowNew(true)}
-            className="rounded-md px-3 py-1.5 text-sm font-medium"
-            style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
-          >
-            + Novo processo
-          </button>
+          {purchaseClosed ? (
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Tipo de despesa fechado para compras novas
+              {project.my_role === 'coordenador' ? ' — libere em Orçamento' : ''}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              className="rounded-md px-3 py-1.5 text-sm font-medium"
+              style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
+            >
+              + Novo processo
+            </button>
+          )}
         </div>
       </div>
 

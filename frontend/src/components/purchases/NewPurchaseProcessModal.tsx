@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { budgetApi } from '../../api/budget'
 import { purchasesApi } from '../../api/purchases'
-import type { ItemBalance } from '../../types'
+import type { ItemBalance, PurchaseCategory } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
 import { AvailabilityBadge } from '../common/AvailabilityBadge'
 
@@ -23,6 +23,10 @@ export function NewPurchaseProcessModal({
   presetPositionId,
 }: NewPurchaseProcessModalProps) {
   const [items, setItems] = useState<ItemBalance[] | null>(null)
+  const [purchaseCategories, setPurchaseCategories] = useState<PurchaseCategory[] | null>(null)
+  // Passo 1: tipo de despesa (só os liberados pelos coordenadores); passo 2: item.
+  const [category, setCategory] = useState<string | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
   const [positionId, setPositionId] = useState<number | null>(presetPositionId ?? null)
   const [title, setTitle] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -33,8 +37,33 @@ export function NewPurchaseProcessModal({
   const [availability, setAvailability] = useState<boolean | null>(null)
 
   useEffect(() => {
-    budgetApi.balance(projectId).then(setItems).catch((err) => setError(err.message))
-  }, [projectId])
+    Promise.all([budgetApi.balance(projectId), budgetApi.purchaseCategories(projectId)])
+      .then(([balance, categories]) => {
+        setItems(balance)
+        setPurchaseCategories(categories)
+        if (presetPositionId !== undefined) {
+          setCategory(balance.find((i) => i.position_id === presetPositionId)?.category ?? null)
+        }
+      })
+      .catch((err) => setError(err.message))
+  }, [projectId, presetPositionId])
+
+  // Tipos de despesa onde dá para abrir compra: liberados, fora da Equipe
+  // Executora e com ao menos um item no orçamento ativo.
+  const openCategories = useMemo(() => {
+    const withItems = new Set((items ?? []).map((i) => i.category))
+    return (purchaseCategories ?? []).filter((c) => c.open && !c.is_personnel && withItems.has(c.category))
+  }, [items, purchaseCategories])
+  const categoryState = purchaseCategories?.find((c) => c.category === category) ?? null
+  const categoryClosed = categoryState !== null && !categoryState.open
+  const categoryItems = useMemo(() => {
+    const query = itemQuery.trim().toLowerCase()
+    return (items ?? [])
+      .filter((i) => i.category === category)
+      .filter(
+        (i) => !query || String(i.item_number) === query.replace(/^n[ºo°]?\s*/, '') || i.description.toLowerCase().includes(query),
+      )
+  }, [items, category, itemQuery])
 
   const selected = items?.find((i) => i.position_id === positionId) ?? null
   const estimatedValue = (Number(quantity) || 0) * (Number(unitValue) || 0)
@@ -94,24 +123,133 @@ export function NewPurchaseProcessModal({
           Novo processo de compra
         </h3>
 
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-          Item de orçamento
-        </label>
-        <select
-          className="mb-3 w-full rounded-md border px-3 py-2 text-sm disabled:opacity-70"
-          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-          value={positionId ?? ''}
-          disabled={presetPositionId !== undefined}
-          onChange={(e) => updateAndResetCheck(setPositionId, e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">Selecione um item…</option>
-          {items?.map((item) => (
-            <option key={item.position_id} value={item.position_id}>
-              {item.category} · Nº{item.item_number} — {item.description}
-              {item.balance !== null ? ` (saldo ${item.balance})` : item.has_balance ? ' (há saldo)' : ' (sem saldo)'}
-            </option>
-          ))}
-        </select>
+        {items === null || purchaseCategories === null ? (
+          <p className="mb-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Carregando itens do orçamento…
+          </p>
+        ) : presetPositionId !== undefined ? (
+          <div className="mb-3 text-sm" style={{ color: 'var(--color-text)' }}>
+            <div style={{ color: 'var(--color-text-muted)' }}>{categoryState?.label ?? category}</div>
+            {selected && (
+              <div className="font-medium">
+                Item {selected.item_number} — {selected.description}
+              </div>
+            )}
+          </div>
+        ) : openCategories.length === 0 ? (
+          <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#fef9c3', color: '#a16207' }}>
+            Nenhum tipo de despesa está liberado para compras neste projeto. Um coordenador precisa liberar em
+            Orçamento (caixa "Compra liberada" no tipo de despesa).
+          </p>
+        ) : (
+          <>
+            <label
+              htmlFor="new-purchase-category"
+              className="mb-1 block text-sm font-medium"
+              style={{ color: 'var(--color-text)' }}
+            >
+              1. Tipo de despesa
+            </label>
+            <select
+              id="new-purchase-category"
+              className="mb-3 w-full rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+              value={category ?? ''}
+              onChange={(e) => {
+                setCategory(e.target.value || null)
+                setItemQuery('')
+                updateAndResetCheck(setPositionId, null)
+              }}
+            >
+              <option value="">Selecione o tipo de despesa…</option>
+              {(['capital', 'corrente'] as const).map((group) => {
+                const options = openCategories.filter((c) => c.group === group)
+                if (options.length === 0) return null
+                return (
+                  <optgroup key={group} label={group === 'capital' ? 'Despesas de capital' : 'Despesas correntes'}>
+                    {options.map((c) => (
+                      <option key={c.category} value={c.category}>
+                        {c.label} ({c.item_count} {c.item_count === 1 ? 'item' : 'itens'})
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
+            </select>
+
+            {category !== null && (
+              <>
+                <label
+                  htmlFor="new-purchase-item-search"
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  2. Item
+                </label>
+                <input
+                  id="new-purchase-item-search"
+                  type="search"
+                  className="mb-2 w-full rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                  value={itemQuery}
+                  onChange={(e) => setItemQuery(e.target.value)}
+                  placeholder="Buscar pelo nº ou pela descrição"
+                />
+                <div
+                  role="listbox"
+                  aria-label="Itens do tipo de despesa"
+                  className="mb-3 max-h-56 overflow-y-auto rounded-md border"
+                  style={{ borderColor: 'var(--color-border)' }}
+                >
+                  {categoryItems.length === 0 && (
+                    <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      Nenhum item encontrado.
+                    </p>
+                  )}
+                  {categoryItems.map((item) => {
+                    const isSelected = item.position_id === positionId
+                    return (
+                      <button
+                        key={item.position_id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => updateAndResetCheck(setPositionId, item.position_id)}
+                        className="flex w-full items-start justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0"
+                        style={{
+                          borderColor: 'var(--color-border)',
+                          background: isSelected ? 'var(--color-surface)' : 'transparent',
+                          color: 'var(--color-text)',
+                          fontWeight: isSelected ? 600 : 400,
+                        }}
+                      >
+                        <span className="min-w-0 break-words">
+                          <span style={{ color: 'var(--color-text-muted)' }}>Nº {item.item_number} — </span>
+                          {item.description}
+                        </span>
+                        <span className="shrink-0 text-xs">
+                          {item.balance === null ? (
+                            <span style={{ color: item.has_balance ? 'var(--color-primary)' : '#dc2626' }}>
+                              {item.has_balance ? 'há saldo' : 'sem saldo'}
+                            </span>
+                          ) : (
+                            <MoneyValue value={item.balance} signColored />
+                          )}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {categoryClosed && (
+          <p className="mb-3 rounded-md px-3 py-2 text-sm" style={{ background: '#fee2e2', color: '#b91c1c' }}>
+            Este tipo de despesa não está liberado para compras — um coordenador pode liberá-lo em Orçamento.
+          </p>
+        )}
 
         {selected && (
           <p className="mb-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -212,7 +350,14 @@ export function NewPurchaseProcessModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || positionId === null || !title.trim() || !unitValue || (exceedsBalance && blockOnExceed)}
+            disabled={
+              submitting ||
+              positionId === null ||
+              categoryClosed ||
+              !title.trim() ||
+              !unitValue ||
+              (exceedsBalance && blockOnExceed)
+            }
             className="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
             style={{ background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }}
           >

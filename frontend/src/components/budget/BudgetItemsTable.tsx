@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { Category, ItemBalance } from '../../types'
+import type { Category, ItemBalance, PurchaseCategory } from '../../types'
 import { MoneyValue } from '../common/MoneyValue'
 import { AvailabilityBadge } from '../common/AvailabilityBadge'
 import { useIsMobile } from '../../lib/useIsMobile'
@@ -50,6 +50,68 @@ function QuantityText({ item }: { item: ItemBalance }) {
 
 function BalanceValue({ item }: { item: ItemBalance }) {
   return item.balance === null ? <AvailabilityBadge hasBalance={item.has_balance} /> : <MoneyValue value={item.balance} signColored />
+}
+
+/** Tipo de despesa liberado para compras novas: coordenador liga/desliga;
+ * colaborador só vê o aviso quando está fechado. Equipe Executora não usa
+ * o fluxo de compra — nada aparece. */
+function PurchaseOpenControl({
+  category,
+  state,
+  canManage,
+  onToggle,
+}: {
+  category: Category
+  state: PurchaseCategory | undefined
+  canManage: boolean
+  onToggle?: (category: Category, open: boolean) => Promise<void>
+}) {
+  const [saving, setSaving] = useState(false)
+  if (category.is_personnel || state === undefined) return null
+  if (!canManage || !onToggle) {
+    return state.open ? null : (
+      <span
+        className="inline-block rounded-full px-2 py-0.5 text-xs font-normal"
+        style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+      >
+        fechado para compras
+      </span>
+    )
+  }
+  async function change(open: boolean) {
+    if (
+      !open &&
+      !window.confirm(
+        `Fechar "${category.label}" para compras novas?
+
+Ninguém poderá abrir compra neste tipo de despesa até ele ser liberado de novo. As compras já abertas continuam normalmente.`,
+      )
+    )
+      return
+    setSaving(true)
+    try {
+      await onToggle!(category, open)
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <label
+      className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-xs font-normal md:min-h-0"
+      style={{ color: state.open ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+      title={state.updated_by ? `Última mudança por ${state.updated_by}` : 'Liberado por padrão'}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        className="h-4 w-4"
+        checked={state.open}
+        disabled={saving}
+        onChange={(e) => change(e.target.checked)}
+      />
+      {state.open ? 'Compra liberada' : 'Fechado para compras'}
+    </label>
+  )
 }
 
 /** Celular: uma linha da tabela = um cartão (Prompt_Horun_Modulo.md, seção 13). */
@@ -148,12 +210,28 @@ export function BudgetItemsTable({
   items,
   projectId,
   initiallyOpen = [],
+  purchaseCategories,
+  canManagePurchases = false,
+  onTogglePurchase,
 }: {
   categories: Category[]
   items: ItemBalance[]
   projectId: number
   initiallyOpen?: string[]
+  /** tipos de despesa liberados para compra (ausente: não mostra nada) */
+  purchaseCategories?: PurchaseCategory[]
+  canManagePurchases?: boolean
+  onTogglePurchase?: (category: Category, open: boolean) => Promise<void>
 }) {
+  const purchaseState = new Map((purchaseCategories ?? []).map((c) => [c.category, c]))
+  const purchaseControl = (category: Category) => (
+    <PurchaseOpenControl
+      category={category}
+      state={purchaseState.get(category.code)}
+      canManage={canManagePurchases}
+      onToggle={onTogglePurchase}
+    />
+  )
   const groups = categories
     .map((category) => ({ category, items: items.filter((i) => i.category === category.code) }))
     .filter((g) => g.items.length > 0)
@@ -223,6 +301,9 @@ export function BudgetItemsTable({
                     </span>
                   </span>
                 </button>
+                {purchaseState.has(category.code) && !category.is_personnel && (canManagePurchases || !purchaseState.get(category.code)!.open) && (
+                  <div className="px-3 pb-2 pl-9">{purchaseControl(category)}</div>
+                )}
                 {isOpen && (
                   <div className="space-y-2 border-t p-2" style={{ borderColor: 'var(--color-border)' }}>
                     {rows.map((item) => (
@@ -277,6 +358,7 @@ export function BudgetItemsTable({
                         {rows.length} {rows.length === 1 ? 'item' : 'itens'}
                         {negatives > 0 && <span style={{ color: '#dc2626' }}> · {negatives} com saldo negativo</span>}
                       </span>
+                      <span className="ml-3 align-middle">{purchaseControl(category)}</span>
                     </td>
                     <td className="px-3 py-2" />
                     {MONEY_FIELDS.slice(0, 4).map((field) => (

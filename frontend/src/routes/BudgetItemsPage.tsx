@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import { budgetApi } from '../api/budget'
-import type { BudgetItem, Category, ItemBalance, Revision } from '../types'
+import type { BudgetItem, Category, ItemBalance, PurchaseCategory, Revision } from '../types'
 import { BudgetItemsTable } from '../components/budget/BudgetItemsTable'
 import { BudgetItemsEditor } from '../components/budget/BudgetItemsEditor'
 import type { ProjectContext } from './ProjectLayout'
@@ -15,6 +15,7 @@ export function BudgetItemsPage() {
 
   const [balance, setBalance] = useState<ItemBalance[] | null>(null)
   const [categories, setCategories] = useState<Category[] | null>(null)
+  const [purchaseCategories, setPurchaseCategories] = useState<PurchaseCategory[] | undefined>(undefined)
   const [revisions, setRevisions] = useState<Revision[] | null>(null)
   const [draftItems, setDraftItems] = useState<BudgetItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +28,7 @@ export function BudgetItemsPage() {
     const requests: Promise<void>[] = [
       budgetApi.categories().then(setCategories),
       budgetApi.revisions(project.id).then(setRevisions),
+      budgetApi.purchaseCategories(project.id).then(setPurchaseCategories),
     ]
     if (project.active_revision_id !== null) {
       requests.push(budgetApi.balance(project.id).then(setBalance))
@@ -45,6 +47,15 @@ export function BudgetItemsPage() {
       setDraftItems(null)
     }
   }, [project.id, draftRevision?.id])
+
+  async function handleTogglePurchase(category: Category, open: boolean) {
+    try {
+      const updated = await budgetApi.setPurchaseCategory(project.id, category.code, open)
+      setPurchaseCategories((current) => current?.map((c) => (c.category === updated.category ? updated : c)))
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Erro ao mudar a liberação para compras.')
+    }
+  }
 
   async function handleCreateDraft() {
     setCreating(true)
@@ -151,12 +162,21 @@ export function BudgetItemsPage() {
               </Link>
             </p>
           )}
+          {isCoordenador && (
+            <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              "Compra liberada" em cada tipo de despesa decide onde a equipe pode abrir compras novas. Fechar não mexe
+              nas compras já abertas.
+            </p>
+          )}
           <BudgetItemsTable
             key={onlyCategory ?? 'todas'}
             categories={categories.filter((c) => !onlyCategory || c.code === onlyCategory)}
             items={balance}
             projectId={project.id}
             initiallyOpen={onlyCategory ? [onlyCategory] : []}
+            purchaseCategories={purchaseCategories}
+            canManagePurchases={isCoordenador}
+            onTogglePurchase={handleTogglePurchase}
           />
         </div>
       )}

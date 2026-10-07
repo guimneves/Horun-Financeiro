@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { BudgetItem, Category, CategorySummary, ItemBalance, Revision } from '../types'
+import type { BudgetItem, Category, CategorySummary, ItemBalance, PurchaseCategory, Revision } from '../types'
 
 export interface RevisionCreateInput {
   label: string
@@ -66,6 +66,12 @@ export const budgetApi = {
       sheetForm(file, { label, effective_date: effectiveDate }),
     ),
   categories: () => api.get<Category[]>('/categories'),
+  /** tipos de despesa e se cada um aceita compras novas (todos leem) */
+  purchaseCategories: (projectId: number) =>
+    api.get<PurchaseCategory[]>(`/projects/${projectId}/purchase-categories`),
+  /** só coordenador: libera (true) ou fecha (false) um tipo de despesa para compras novas */
+  setPurchaseCategory: (projectId: number, category: string, open: boolean) =>
+    api.put<PurchaseCategory>(`/projects/${projectId}/purchase-categories/${category}`, { open }),
   balance: (projectId: number) => api.get<ItemBalance[]>(`/projects/${projectId}/balance`),
   summary: (projectId: number) => api.get<CategorySummary[]>(`/projects/${projectId}/summary`),
 
