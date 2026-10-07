@@ -6,10 +6,48 @@ sessão de trabalho iniciada em 29/09/2026. Para o estado atual, decisões e
 plano, ver [`ESTADO_E_PLANOS.md`](ESTADO_E_PLANOS.md).
 
 Desde 06/10/2026 há uma branch só, a `master` (o modo agente, antes na
-`wip/drive-agent`, foi incorporado): 279 testes do backend passam; frontend
+`wip/drive-agent`, foi incorporado): 289 testes do backend passam; frontend
 compila (`tsc -b`) e passa no lint.
 
 ---
+
+## 07/10/2026 — Tipos de despesa liberados para compra e filtros na caixa de compra
+
+Pedido do mantenedor: "Melhorar os filtros na caixa de compra: primeiro
+selecionar o tipo de despesa, depois selecionar o item. Os coordenadores
+decidem quais despesas do orçamento vão para a compra." Confirmado em
+seguida: a decisão é por **tipo de despesa** (categoria), não por item.
+
+- **Liberação por tipo de despesa** (coordenador): tabela nova
+  `ProjectPurchaseCategory` (projeto + categoria + liberado + quem/quando).
+  Sem linha = liberado, então os projetos existentes não mudam; tabela nova
+  é criada pelo `create_all`, sem `_ensure_column`. Rotas
+  `GET /api/projects/{id}/purchase-categories` (todos leem: rótulo, grupo,
+  liberado, nº de itens da revisão ativa) e
+  `PUT /api/projects/{id}/purchase-categories/{categoria}` `{"open": bool}`
+  (só coordenador; 422 para Equipe Executora; evento `compra_liberada` /
+  `compra_fechada` no histórico). Excluir o projeto apaga essas linhas.
+- **Regra**: criar compra num item de tipo fechado → 409 "Este tipo de
+  despesa não está liberado para compras — um coordenador pode liberá-lo em
+  Orçamento." para todos (o coordenador libera antes). Compras já abertas
+  continuam (etapas, documentos, edição). Não há rota para trocar o item de
+  uma compra; a correção de item feita pela sincronização do drive
+  (histórico da planilha) não é bloqueada, como a política de saldo.
+- **Orçamento**: caixa "Compra liberada" em cada linha de tipo de despesa
+  (tabela e cartões do celular), com confirmação ao fechar.
+- **Nova compra**: passo 1 "Tipo de despesa" (rótulos legíveis, agrupados em
+  capital/correntes, só os liberados com itens); passo 2 "Item" com busca por
+  nº ou descrição e o saldo (ou "há saldo"/"sem saldo") de cada item. Sem tipo
+  liberado, a janela explica que um coordenador precisa liberar em
+  Orçamento. Na página do item, tipo fechado troca o botão "+ Novo processo"
+  por um aviso.
+- **Lista de compras**: cada cartão mostra acima do título "tipo de despesa ·
+  Item N — descrição"; filtros por tipo de despesa → item (dependente),
+  situação e busca (título, fornecedor, nº do processo), guardados na URL
+  (`?tipo=&item=&status=&q=&concluidos=1`).
+- Manual: "Como abrir um processo de compra" (tipo → item), "Como achar uma
+  compra na lista" e "Liberar tipos de despesa para compra (coordenador)".
+- 10 testes novos (`tests/test_purchase_categories.py`, 289 no total).
 
 ## 07/10/2026 — Arquivar/desarquivar e excluir projeto
 
