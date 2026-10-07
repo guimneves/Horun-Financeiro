@@ -15,8 +15,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(() => {
+    // Traz também os arquivados: um projeto arquivado continua abrindo pelo
+    // endereço (ProjectLayout); a lista e a barra lateral é que os escondem.
     projectsApi
-      .list()
+      .list(true)
       .then((rows) => {
         setProjects(rows)
         setError(null)

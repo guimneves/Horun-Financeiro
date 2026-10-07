@@ -10,6 +10,9 @@ export interface Project {
   active_revision_id: number | null
   drive_folder: string | null
   balance_policy: 'bloquear' | 'avisar'
+  /** arquivado: fora da lista e da sincronização automática; os dados ficam */
+  archived_at: string | null
+  archived_by: string | null
   my_role: 'coordenador' | 'colaborador' | null
 }
 

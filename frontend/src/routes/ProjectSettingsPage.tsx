@@ -1,15 +1,128 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { fundingApi, type InstallmentInput } from '../api/funding'
 import { projectsApi } from '../api/projects'
+import { useCoordenadorSession } from '../context/CoordenadorContext'
+import type { Project } from '../types'
 import type { ProjectContext } from './ProjectLayout'
 
 const card = { borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }
 const input = { borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }
 const primaryButton = { background: 'var(--color-primary)', color: 'var(--color-primary-contrast)' }
 
+/** Arquivar/desarquivar (coordenador) — a página toda já é só de coordenador. */
+function ArchiveSection({ project, onDone }: { project: Project; onDone: (text: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const archived = Boolean(project.archived_at)
+
+  async function toggle() {
+    if (
+      !archived &&
+      !window.confirm(
+        `Arquivar o projeto ${project.code}?\n\nEle sai da lista de projetos e da sincronização automática com o drive. ` +
+          'Nenhum dado é apagado: o projeto continua abrindo por "Mostrar arquivados" e pode ser desarquivado a qualquer momento.',
+      )
+    )
+      return
+    setBusy(true)
+    setError(null)
+    try {
+      await (archived ? projectsApi.unarchive(project.id) : projectsApi.archive(project.id))
+      onDone(archived ? 'Projeto desarquivado.' : 'Projeto arquivado.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao arquivar.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-lg border p-4" style={card}>
+      <h3 className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+        Arquivar projeto
+      </h3>
+      <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        {archived
+          ? `Arquivado em ${new Date(project.archived_at!).toLocaleDateString('pt-BR')}${project.archived_by ? ` por ${project.archived_by}` : ''}. Desarquivar volta o projeto à lista e à sincronização automática.`
+          : 'Para projetos encerrados: sai da lista de projetos e da sincronização automática com o drive, mas todos os dados ficam e continuam abrindo. Dá para desarquivar quando quiser.'}
+      </p>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={toggle}
+        className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+      >
+        {busy ? 'Salvando…' : archived ? 'Desarquivar projeto' : 'Arquivar projeto'}
+      </button>
+    </section>
+  )
+}
+
+/** Excluir de vez — só o administrador máximo do Horun (nível 1); o backend confere. */
+function DeleteSection({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const matches = typed.trim() === project.code
+
+  async function handleDelete() {
+    if (!matches) return
+    setBusy(true)
+    setError(null)
+    try {
+      await projectsApi.remove(project.id, typed.trim())
+      onDeleted()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="mt-10 rounded-lg border p-4" style={{ borderColor: '#fca5a5', background: 'var(--color-bg-elevated)' }}>
+      <h3 className="mb-1 text-sm font-semibold" style={{ color: '#b91c1c' }}>
+        Excluir projeto
+      </h3>
+      <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        Apaga <strong>para sempre</strong> todos os dados deste projeto no Financeiro: orçamento e revisões, compras,
+        equipe, parcelas, participantes, histórico e os documentos anexados guardados no servidor. Não dá para desfazer —
+        se a ideia é só tirar da lista, use "Arquivar".
+      </p>
+      <p className="mb-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        Os arquivos da pasta do projeto no drive <strong>não</strong> são apagados.
+      </p>
+      <label className="mb-2 block text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        Digite o código do projeto ({project.code}) para confirmar
+        <input
+          className="mt-1 block w-full max-w-xs rounded-md border px-3 py-2 text-sm"
+          style={input}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          autoComplete="off"
+        />
+      </label>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      <button
+        type="button"
+        disabled={!matches || busy}
+        onClick={handleDelete}
+        className="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
+        style={{ background: '#b91c1c', color: '#fff' }}
+      >
+        {busy ? 'Excluindo…' : 'Excluir projeto definitivamente'}
+      </button>
+    </section>
+  )
+}
+
 export function ProjectSettingsPage() {
   const { project, reloadProject } = useOutletContext<ProjectContext>()
+  const { me } = useCoordenadorSession()
+  const navigate = useNavigate()
+  const isSuperAdmin = me?.level === 1
   const [driveFolder, setDriveFolder] = useState(project.drive_folder ?? '')
   const [startDate, setStartDate] = useState(project.start_date ?? '')
   const [endDate, setEndDate] = useState(project.end_date ?? '')
@@ -198,6 +311,26 @@ export function ProjectSettingsPage() {
           </>
         )}
       </section>
+
+      <div className="mt-6">
+        <ArchiveSection
+          project={project}
+          onDone={(text) => {
+            reloadProject()
+            setMessage({ kind: 'ok', text })
+          }}
+        />
+      </div>
+
+      {isSuperAdmin && (
+        <DeleteSection
+          project={project}
+          onDeleted={() => {
+            reloadProject()
+            navigate('/', { replace: true })
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -26,6 +26,8 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
   const match = location.pathname.match(/^\/projects\/(\d+)/)
   const currentProjectId = match ? Number(match[1]) : null
   const manualActive = location.pathname.startsWith('/manual')
+  // Arquivados não aparecem — só o que está aberto agora, para navegar nele.
+  const visible = projects?.filter((p) => !p.archived_at || p.id === currentProjectId) ?? null
 
   return (
     <>
@@ -65,14 +67,14 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
           Carregando…
         </p>
       )}
-      {projects?.length === 0 && (
+      {visible?.length === 0 && (
         <p className="px-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Nenhum projeto ainda.
         </p>
       )}
 
       <nav className="flex flex-col gap-0.5">
-        {projects?.map((project) => {
+        {visible?.map((project) => {
           const isCurrent = project.id === currentProjectId
           const isCoordenador = project.my_role === 'coordenador'
           const navItems = isCoordenador ? COORDENADOR_NAV_ITEMS : OPERADOR_NAV_ITEMS
@@ -89,6 +91,7 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
                 title={project.name}
               >
                 {project.name}
+                {project.archived_at && <span className="ml-1 text-xs">(arquivado)</span>}
               </Link>
 
               {isCurrent && (

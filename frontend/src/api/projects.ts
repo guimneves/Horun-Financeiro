@@ -33,11 +33,19 @@ export interface ProjectCreateInput {
 }
 
 export const projectsApi = {
-  list: () => api.get<Project[]>('/projects'),
+  /** `includeArchived`: traz também os arquivados (a lista padrão os esconde) */
+  list: (includeArchived = false) =>
+    api.get<Project[]>(`/projects${includeArchived ? '?include_archived=true' : ''}`),
   /** só o admin do Core; quem cria entra como coordenador do projeto */
   create: (body: ProjectCreateInput) => api.post<Project>('/projects', body),
   get: (projectId: number) => api.get<Project>(`/projects/${projectId}`),
   update: (projectId: number, body: ProjectUpdateInput) => api.patch<Project>(`/projects/${projectId}`, body),
+  /** coordenador: tira da lista e da sincronização automática, sem apagar nada */
+  archive: (projectId: number) => api.post<Project>(`/projects/${projectId}/archive`),
+  unarchive: (projectId: number) => api.post<Project>(`/projects/${projectId}/unarchive`),
+  /** só o administrador máximo; `confirmCode` = código do projeto. Não toca no drive. */
+  remove: (projectId: number, confirmCode: string) =>
+    api.delete<void>(`/projects/${projectId}`, { confirm_code: confirmCode }),
 
   members: (projectId: number) => api.get<Membership[]>(`/projects/${projectId}/members`),
   addMember: (projectId: number, body: MembershipCreateInput) =>

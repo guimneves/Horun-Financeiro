@@ -92,6 +92,7 @@ export function ProjectListPage() {
   const navigate = useNavigate()
   const [isCoreAdmin, setIsCoreAdmin] = useState(false)
   const [showNew, setShowNew] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     authApi
@@ -102,6 +103,11 @@ export function ProjectListPage() {
 
   if (error) return <p className="p-6 text-red-600">Erro ao carregar projetos: {error}</p>
   if (projects === null) return <p className="p-6">Carregando…</p>
+
+  // Arquivados ficam escondidos; o link no fim da página mostra (com o selo "Arquivado").
+  const active = projects.filter((p) => !p.archived_at)
+  const archived = projects.filter((p) => p.archived_at)
+  const shown = showArchived ? [...active, ...archived] : active
 
   return (
     <div className="p-4 md:p-6">
@@ -132,7 +138,7 @@ export function ProjectListPage() {
         />
       )}
 
-      {projects.length === 0 && !showNew && (
+      {active.length === 0 && !showNew && (
         <p style={{ color: 'var(--color-text-muted)' }}>
           {isCoreAdmin
             ? 'Nenhum projeto ainda — crie o primeiro em "+ Novo projeto".'
@@ -141,18 +147,26 @@ export function ProjectListPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project) => (
+        {shown.map((project) => (
           <Link
             key={project.id}
             to={`/projects/${project.id}`}
             className="block rounded-lg border p-4 transition-colors hover:opacity-90"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}
+            style={{
+              borderColor: 'var(--color-border)',
+              background: 'var(--color-bg-elevated)',
+              opacity: project.archived_at ? 0.7 : undefined,
+            }}
           >
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 Processo {project.code}
               </span>
-              <StatusBadge label={project.my_role ?? ''} tone={project.my_role === 'coordenador' ? 'success' : 'neutral'} />
+              {project.archived_at ? (
+                <StatusBadge label="Arquivado" />
+              ) : (
+                <StatusBadge label={project.my_role ?? ''} tone={project.my_role === 'coordenador' ? 'success' : 'neutral'} />
+              )}
             </div>
             <div className="font-medium" style={{ color: 'var(--color-text)' }}>
               {project.name}
@@ -163,6 +177,17 @@ export function ProjectListPage() {
           </Link>
         ))}
       </div>
+
+      {archived.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowArchived((v) => !v)}
+          className="mt-4 min-h-10 text-sm underline"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          {showArchived ? 'Esconder arquivados' : `Mostrar arquivados (${archived.length})`}
+        </button>
+      )}
     </div>
   )
 }

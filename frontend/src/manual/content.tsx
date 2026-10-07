@@ -461,6 +461,53 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     ),
   },
   {
+    id: 'arquivar',
+    title: 'Arquivar um projeto encerrado (coordenador)',
+    body: (
+      <>
+        <Steps>
+          <li>
+            Abra o projeto, vá em <strong>Configurações</strong> e, em <strong>Arquivar projeto</strong>, clique em{' '}
+            <strong>Arquivar projeto</strong> e confirme.
+          </li>
+          <li>
+            O projeto sai da lista de projetos e da sincronização automática com o drive. Nenhum dado é apagado.
+          </li>
+          <li>
+            Para ver os arquivados, use <strong>Mostrar arquivados</strong> no fim da lista de projetos (eles aparecem
+            com o selo <strong>Arquivado</strong>). Dentro de um projeto arquivado aparece um aviso amarelo no topo.
+          </li>
+          <li>
+            Para voltar ao normal: <strong>Configurações</strong> → <strong>Desarquivar projeto</strong>.
+          </li>
+        </Steps>
+      </>
+    ),
+  },
+  {
+    id: 'excluir',
+    title: 'Excluir um projeto (só o administrador máximo)',
+    body: (
+      <>
+        <p>
+          Só o administrador máximo do Horun vê, no fim de <strong>Configurações</strong>, a seção vermelha{' '}
+          <strong>Excluir projeto</strong>. Ela apaga para sempre todos os dados do projeto no Financeiro: orçamento,
+          compras, equipe, parcelas, histórico e os documentos anexados guardados no servidor.
+        </p>
+        <Steps>
+          <li>Digite o código do projeto (ex.: 25.465) no campo de confirmação.</li>
+          <li>
+            Clique em <strong>Excluir projeto definitivamente</strong> — o botão só libera quando o código confere.
+          </li>
+        </Steps>
+        <Tip>
+          Os arquivos da pasta do projeto no drive não são apagados. Se a ideia é só tirar o projeto da lista, prefira{' '}
+          <strong>Arquivar</strong>, que dá para desfazer.
+        </Tip>
+      </>
+    ),
+  },
+  {
     id: 'modo-coordenador',
     title: 'Senha de coordenador (só no computador de desenvolvimento)',
     body: (

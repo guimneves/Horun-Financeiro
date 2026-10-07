@@ -1,6 +1,9 @@
-import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
+import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
 import { useProjects } from '../context/ProjectsContext'
 import type { Project } from '../types'
+
+/** dd/mm/aaaa, no fuso de quem vê */
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR')
 
 export interface ProjectContext {
   project: Project
@@ -39,6 +42,23 @@ export function ProjectLayout() {
           Processo {project.code} · {project.my_role === 'coordenador' ? 'Coordenador' : 'Colaborador'}
         </div>
       </div>
+
+      {project.archived_at && (
+        <div className="border-b px-4 py-2 text-sm md:px-6" style={{ borderColor: '#fde68a', background: '#fef9c3', color: '#854d0e' }}>
+          Projeto arquivado em {formatDate(project.archived_at)}
+          {isCoordenador ? (
+            <>
+              {' '}— desarquive em{' '}
+              <Link to={`/projects/${project.id}/settings`} className="underline">
+                Configurações
+              </Link>
+              .
+            </>
+          ) : (
+            '.'
+          )}
+        </div>
+      )}
 
       <div className="flex-1">
         <Outlet context={{ project, reloadProject: reload } satisfies ProjectContext} />
