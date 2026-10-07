@@ -20,10 +20,28 @@ import { CoordenadorProvider, useCoordenadorSession } from './context/Coordenado
 import { ProjectsProvider, useProjects } from './context/ProjectsContext'
 import { CoordenadorButton } from './components/common/CoordenadorButton'
 import { DevUserSwitcher } from './components/common/DevUserSwitcher'
+import { BackToHorunLink } from './components/common/BackToHorunLink'
 import { AppSidebar } from './components/layout/AppSidebar'
 
+/** Papel efetivo no modo módulo (vem do cargo no Horun), discreto no cabeçalho. */
+function RoleBadge() {
+  const { me, rolesFromCore } = useCoordenadorSession()
+  if (!rolesFromCore || !me?.module_role) return null
+  const label = me.module_role === 'coordenador' ? 'Coordenador(a)' : 'Colaborador(a)'
+  return (
+    <span
+      className="max-w-[45vw] truncate rounded-full px-2.5 py-1 text-xs"
+      style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+      title={`${me.username} — papel neste módulo, pelo seu cargo no Horun`}
+    >
+      <span className="hidden sm:inline">{me.username} · </span>
+      {label}
+    </span>
+  )
+}
+
 function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
-  const { isElevated } = useCoordenadorSession()
+  const { isElevated, canOrganize, me } = useCoordenadorSession()
   const { reload } = useProjects()
 
   // `my_role` de cada projeto reflete a elevação assim que ela muda — sem
@@ -51,15 +69,19 @@ function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Link to="/" className="truncate text-lg font-semibold" style={{ color: 'var(--color-primary)' }}>
           Horun · Financeiro
         </Link>
-        {isElevated && (
+        {canOrganize && (
           <Link to="/organizacao" className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
             Organização
           </Link>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {/* celular: o "Voltar ao Horun" fica na gaveta (AppSidebar) */}
+        <BackToHorunLink className="hidden md:inline" />
         {import.meta.env.DEV && <DevUserSwitcher />}
-        <CoordenadorButton />
+        <RoleBadge />
+        {/* senha mestra: só no desenvolvimento — no modo módulo o papel vem do cargo no Horun */}
+        {me && !me.roles_from_core && <CoordenadorButton />}
         <ThemeToggle />
       </div>
     </header>

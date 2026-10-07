@@ -3,12 +3,14 @@ import { useOutletContext } from 'react-router-dom'
 import { projectsApi, type Membership } from '../api/projects'
 import { knownUsersApi, type KnownUser } from '../api/knownUsers'
 import { StatusBadge } from '../components/common/StatusBadge'
+import { useCoordenadorSession } from '../context/CoordenadorContext'
 import type { ProjectContext } from './ProjectLayout'
 
 const MANUAL_OPTION = '__manual__'
 
 export function ProjectMembersPage() {
   const { project } = useOutletContext<ProjectContext>()
+  const { rolesFromCore } = useCoordenadorSession()
   const [members, setMembers] = useState<Membership[] | null>(null)
   const [knownUsers, setKnownUsers] = useState<KnownUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -70,6 +72,19 @@ export function ProjectMembersPage() {
       <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
         Membros do projeto
       </h2>
+
+      {rolesFromCore && (
+        <p
+          className="mb-4 rounded-md border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+        >
+          Quem entra e o que pode fazer vem do <strong>cargo no Horun</strong>: administrador máximo e coordenadores
+          coordenam todos os projetos; os demais colaboram. Esta lista <strong>não dá nem tira acesso</strong> — ela
+          diz quem participa do projeto e quem recebe os avisos: os marcados como coordenador recebem os pedidos de
+          autorização e os alertas de saldo. Sem nenhum coordenador marcado, os avisos vão para o administrador
+          máximo e os coordenadores do Horun.
+        </p>
+      )}
 
       <div
         className="mb-6 flex flex-wrap items-end gap-2 rounded-lg border p-4"

@@ -11,6 +11,14 @@ export interface Me {
   role: string
   /** admin do Core — quem pode criar projeto */
   is_core_admin: boolean
+  /** cargo no Horun: 1 admin máximo, 2 coordenador(a), 3 pesquisador, 4 técnico, 5 IC */
+  level: number
+  /** backend em HORUN_DEV_MODE (desenvolvimento local) */
+  dev_mode: boolean
+  /** modo módulo: papel pelo cargo no Horun, sem senha mestra */
+  roles_from_core: boolean
+  /** papel em todos os projetos no modo módulo (null no desenvolvimento) */
+  module_role: 'coordenador' | 'colaborador' | null
 }
 
 export const authApi = {

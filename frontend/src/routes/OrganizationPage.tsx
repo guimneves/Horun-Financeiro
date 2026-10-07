@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { authApi } from '../api/auth'
 import { AgentPanel } from '../components/AgentPanel'
+import { useCoordenadorSession } from '../context/CoordenadorContext'
 
 export function OrganizationPage() {
+  const { rolesFromCore } = useCoordenadorSession()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -35,6 +37,17 @@ export function OrganizationPage() {
 
   return (
     <div className="p-4 md:p-6">
+    {rolesFromCore ? (
+      <div className="mx-auto max-w-3xl">
+        <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+          Organização interna
+        </h2>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Neste servidor o papel de cada pessoa vem do cargo dela no Horun: administrador máximo e coordenadores
+          coordenam todos os projetos; os demais colaboram. Não há senha de coordenador.
+        </p>
+      </div>
+    ) : (
     <div className="mx-auto max-w-md">
       <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
         Organização interna
@@ -106,6 +119,7 @@ export function OrganizationPage() {
         </button>
       </div>
     </div>
+    )}
 
     {/* só aparece para o admin do Core (a listagem dá 403 para os outros) */}
     <div className="mx-auto mt-8 max-w-3xl">

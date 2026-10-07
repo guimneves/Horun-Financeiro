@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useProjects } from '../../context/ProjectsContext'
+import { BackToHorunLink } from '../common/BackToHorunLink'
 
 const COORDENADOR_NAV_ITEMS = [
   { to: '', label: 'Resumo' },
@@ -52,6 +53,8 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
           ✕
         </button>
       </div>
+      {/* no computador o "Voltar ao Horun" fica no cabeçalho */}
+      <BackToHorunLink className="mb-3 block rounded-md px-2 py-2.5 md:hidden" />
       <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
         Projetos
       </div>

@@ -53,7 +53,13 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     title: 'Quem pode fazer o quê',
     body: (
       <>
-        <p>Para entrar num projeto, a pessoa precisa estar cadastrada nele (aba Membros). Há dois papéis:</p>
+        <p>
+          O seu papel vem do seu <strong>cargo no Horun</strong> e vale em todos os projetos do Financeiro: o
+          administrador máximo e os coordenadores do Horun entram como <strong>Coordenador</strong>; pesquisadores,
+          técnicos e alunos de iniciação científica que têm acesso ao módulo entram como{' '}
+          <strong>Colaborador</strong>. O papel aparece no alto da tela, ao lado do seu nome. Para mudar de papel,
+          o administrador do Horun muda o seu cargo lá.
+        </p>
         <Bullets>
           <li>
             <strong>Colaborador</strong> — vê só a aba <strong>Compras</strong> do projeto. Abre processos de compra,
@@ -70,14 +76,13 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           </li>
           <li>
             <strong>Administrador do Horun</strong> — além do que o papel dele no projeto permite, é o único que cria um
-            projeto novo (<strong>+ Novo projeto</strong>); quem cria entra como coordenador.
-          </li>
-          <li>
-            <strong>Modo coordenador</strong> — quem conhece a senha de coordenador do módulo pode clicar em{' '}
-            <strong>Entrar como coordenador</strong> e passar a agir como coordenador em todos os projetos em que já
-            está cadastrado (veja "Modo coordenador e senha").
+            projeto novo (<strong>+ Novo projeto</strong>); quem cria fica na lista de membros como coordenador.
           </li>
         </Bullets>
+        <Tip>
+          A aba <strong>Membros</strong> não dá nem tira acesso: ela diz quem participa do projeto e quem recebe os
+          avisos (veja "Membros do projeto").
+        </Tip>
       </>
     ),
   },
@@ -97,8 +102,9 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           </li>
         </Steps>
         <Tip>
-          Não aparece nenhum projeto? Você ainda não foi cadastrado. Peça ao coordenador do projeto para incluir você
-          na aba Membros — você só aparece na lista dele depois de abrir o Financeiro pelo menos uma vez.
+          Todos os projetos do Financeiro aparecem para quem tem acesso ao módulo. Não aparece nenhum? Ainda não há
+          projeto cadastrado — só o administrador do Horun cria. Para voltar à página inicial do Horun, use{' '}
+          <strong>← Voltar ao Horun</strong> no alto da tela (no celular, dentro do <strong>☰</strong>).
         </Tip>
       </>
     ),
@@ -365,6 +371,13 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     id: 'membros',
     title: 'Membros do projeto (coordenador)',
     body: (
+      <>
+      <p>
+        A lista de membros diz <strong>quem participa do projeto e quem recebe os avisos</strong> — ela não dá nem
+        tira acesso (o papel vem do cargo no Horun). Os marcados como <strong>Coordenador</strong> recebem os pedidos
+        de autorização e os alertas de saldo; se nenhum estiver marcado, os avisos vão para o administrador máximo e
+        os coordenadores do Horun.
+      </p>
       <Steps>
         <li>
           Em <strong>Membros</strong>, escolha a <strong>Pessoa</strong>. Só aparece quem já abriu o Financeiro pelo
@@ -377,6 +390,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           Para tirar alguém do projeto, clique em <strong>remover</strong> na linha dela.
         </li>
       </Steps>
+      </>
     ),
   },
   {
@@ -448,9 +462,13 @@ export const MANUAL_SECTIONS: ManualSection[] = [
   },
   {
     id: 'modo-coordenador',
-    title: 'Modo coordenador e senha',
+    title: 'Senha de coordenador (só no computador de desenvolvimento)',
     body: (
       <>
+        <p>
+          No Horun não existe senha de coordenador: o papel vem do cargo. Ela só existe quando o Financeiro roda no
+          computador do responsável, para testes e apresentações:
+        </p>
         <Steps>
           <li>
             No alto da tela, clique em <strong>🔒 Entrar como coordenador</strong> (no celular o botão mostra só{' '}
@@ -498,7 +516,9 @@ export const MANUAL_SECTIONS: ManualSection[] = [
         </p>
         <Bullets>
           <li>
-            <strong>Compra aguardando autorização</strong> — para os coordenadores do projeto, quando alguém clica em{' '}
+            <strong>Compra aguardando autorização</strong> — para os coordenadores do projeto (os marcados como
+            coordenador na aba Membros; sem nenhum marcado, o administrador máximo e os coordenadores do Horun),
+            quando alguém clica em{' '}
             <strong>Solicitar autorização à COPPETEC</strong>.
           </li>
           <li>
@@ -511,7 +531,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
           </li>
         </Bullets>
         <p>
-          Ninguém recebe aviso da própria ação. Os avisos não trazem valores em R$ — o link abre o processo no
+          Ninguém recebe aviso da própria ação (salvo quando o aviso vai para os cargos do Horun). Os avisos não trazem valores em R$ — o link abre o processo no
           Horun. Para não receber e-mails, desligue em "Meu perfil" no Horun (o sininho continua).
         </p>
       </>
@@ -525,8 +545,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
         <div>
           <dt className="font-semibold">Por que não vejo os valores em R$?</dt>
           <dd>
-            Colaboradores não veem valores — só se há saldo ou não. Se você precisa ver, peça ao coordenador para
-            mudar o seu papel.
+            Colaboradores não veem valores — só se há saldo ou não. O papel vem do seu cargo no Horun; se você
+            precisa ver, fale com o administrador do Horun.
           </dd>
         </div>
         <div>
@@ -570,9 +590,9 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     title: 'Quem procurar',
     body: (
       <p>
-        Dúvidas sobre um projeto (acesso, papel, valores, orçamento): o <strong>coordenador do projeto</strong>.
-        Problemas no programa, senha de coordenador ou sugestões: <strong>o responsável pelo módulo no
-        laboratório</strong>.
+        Dúvidas sobre um projeto (valores, orçamento, compras): o <strong>coordenador do projeto</strong>. Acesso ao
+        módulo ou papel (cargo no Horun): o <strong>administrador do Horun</strong>. Problemas no programa ou
+        sugestões: <strong>o responsável pelo módulo no laboratório</strong>.
       </p>
     ),
   },
