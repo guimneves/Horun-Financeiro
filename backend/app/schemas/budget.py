@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
@@ -92,6 +92,25 @@ class ItemBalanceOut(BaseModel):
     has_balance: bool
     coppetec_process_number: str | None
     available_quantity: Decimal | None = None
+
+
+class PurchaseCategoryOut(BaseModel):
+    """Tipo de despesa e se está liberado para compras novas neste projeto."""
+
+    category: str
+    label: str
+    group: str
+    is_personnel: bool
+    open: bool  # Equipe Executora: sempre false (não usa o fluxo de compra)
+    item_count: int  # itens da revisão ativa nesta categoria
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class PurchaseCategoryUpdate(BaseModel):
+    """Liberar (true) ou fechar (false) para compras novas."""
+
+    open: bool
 
 
 class CategorySummaryOut(BaseModel):

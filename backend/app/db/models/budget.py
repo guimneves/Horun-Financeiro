@@ -55,6 +55,24 @@ class BudgetPosition(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class ProjectPurchaseCategory(SQLModel, table=True):
+    """Tipo de despesa liberado (ou não) para compras novas, por projeto —
+    decisão dos coordenadores (pedido de 07/10/2026). SEM linha = liberado:
+    projetos existentes continuam como estavam. Fechar não mexe nas compras
+    já abertas; só impede compras novas naquele tipo de despesa."""
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "category", name="uq_purchase_category_project_category"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    category: str  # chave de EXPENSE_CATEGORIES
+    open: bool = True
+    updated_by: str = ""
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class BudgetRevision(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("project_id", "revision_number", name="uq_revision_project_number"),

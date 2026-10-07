@@ -46,6 +46,7 @@ from app.services.drive_write import (
     unlink_paths,
 )
 from app.services.notifications import notify_transition
+from app.services.purchase_categories import PURCHASE_CLOSED_MESSAGE, is_category_open
 from app.services.transitions import TransitionError, apply_transition
 
 router = APIRouter(prefix="/projects/{project_id}/purchase-processes", tags=["purchases"])
@@ -174,6 +175,9 @@ def create_process(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Equipe Executora não usa o fluxo de compra — lance uma atribuição de pessoal.",
         )
+    if not is_category_open(session, project_id, position.category):
+        # Vale para todos: o coordenador libera o tipo de despesa antes (Orçamento).
+        raise HTTPException(status.HTTP_409_CONFLICT, PURCHASE_CLOSED_MESSAGE)
     if body.previous_attempt_id is not None:
         previous = _get_process(session, project_id, body.previous_attempt_id)
         if previous.status not in ("cancelado", "rejeitado"):

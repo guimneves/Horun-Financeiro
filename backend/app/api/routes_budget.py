@@ -9,17 +9,24 @@ antigos, nunca sobrescritos. Editar itens só é permitido em revisões
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
 from app.core.files import read_upload_limited
+from app.core.identity import HorunIdentity, get_identity
 from app.core.money import round_money
 from app.core.permissions import get_membership, require_coordenador
 from app.core.redaction import money
-from app.db.models.budget import EXPENSE_CATEGORIES, BudgetItem, BudgetPosition, BudgetRevision
+from app.db.models.budget import (
+    EXPENSE_CATEGORIES,
+    BudgetItem,
+    BudgetPosition,
+    BudgetRevision,
+    ProjectPurchaseCategory,
+)
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
 from app.schemas.budget import (
@@ -32,11 +39,15 @@ from app.schemas.budget import (
     BudgetItemUpdate,
     CategorySummaryOut,
     ItemBalanceOut,
+    PurchaseCategoryOut,
+    PurchaseCategoryUpdate,
     RevisionCreate,
     RevisionOut,
     YieldUpdate,
 )
+from app.services.audit import record_event
 from app.services.balance import category_summary, item_balances
+from app.services.purchase_categories import category_rows
 from app.services.budget_import import BudgetImportError, BudgetSheetResult, parse_budget_sheet
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["budget"])
@@ -319,6 +330,89 @@ def update_yield(
     session.commit()
     session.refresh(item)
     return _item_out(item, position, visible=True)  # rota já é coordenador-only
+
+
+# ------------------------------------- tipos de despesa liberados p/ compra
+
+
+def _purchase_categories(session: Session, project_id: int) -> list[PurchaseCategoryOut]:
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
+    counts: dict[str, int] = {}
+    if project.active_revision_id is not None:
+        for category in session.exec(
+            select(BudgetPosition.category)
+            .join(BudgetItem, BudgetItem.position_id == BudgetPosition.id)
+            .where(BudgetItem.revision_id == project.active_revision_id)
+        ):
+            counts[category] = counts.get(category, 0) + 1
+    rows = category_rows(session, project_id)
+    result = []
+    for code, meta in EXPENSE_CATEGORIES.items():
+        row = rows.get(code)
+        result.append(PurchaseCategoryOut(
+            category=code,
+            label=str(meta["label"]),
+            group=str(meta["group"]),
+            is_personnel=bool(meta["is_personnel"]),
+            open=not meta["is_personnel"] and (row is None or row.open),
+            item_count=counts.get(code, 0),
+            updated_by=row.updated_by if row else None,
+            updated_at=row.updated_at if row else None,
+        ))
+    return result
+
+
+@router.get("/purchase-categories", response_model=list[PurchaseCategoryOut])
+def list_purchase_categories(
+    project_id: int,
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(get_membership),
+):
+    """Tipos de despesa e se cada um aceita compras novas — todos leem
+    (o colaborador precisa saber onde pode abrir uma compra)."""
+    return _purchase_categories(session, project_id)
+
+
+@router.put("/purchase-categories/{category}", response_model=PurchaseCategoryOut)
+def set_purchase_category(
+    project_id: int,
+    category: str,
+    body: PurchaseCategoryUpdate,
+    identity: HorunIdentity = Depends(get_identity),
+    session: Session = Depends(get_session),
+    _membership: ProjectMembership = Depends(require_coordenador),
+):
+    """Libera ou fecha um tipo de despesa para compras novas. Compras já
+    abertas nele continuam como estão."""
+    if category not in EXPENSE_CATEGORIES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tipo de despesa não encontrado.")
+    if EXPENSE_CATEGORIES[category]["is_personnel"]:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Equipe Executora não usa o fluxo de compra — não há o que liberar.",
+        )
+    row = category_rows(session, project_id).get(category)
+    current = row is None or row.open
+    if current != body.open:
+        if row is None:
+            row = ProjectPurchaseCategory(project_id=project_id, category=category)
+        row.open = body.open
+        row.updated_by = identity.username
+        row.updated_at = datetime.now(timezone.utc)
+        session.add(row)
+        record_event(
+            session,
+            project_id=project_id,
+            entity_type="purchase_category",
+            entity_id=None,
+            action="compra_liberada" if body.open else "compra_fechada",
+            actor=identity,
+            detail={"tipo_de_despesa": EXPENSE_CATEGORIES[category]["label"], "categoria": category},
+        )
+        session.commit()
+    return next(c for c in _purchase_categories(session, project_id) if c.category == category)
 
 
 def _require_active_revision(session: Session, project_id: int) -> BudgetRevision:

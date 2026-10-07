@@ -4,6 +4,7 @@ from app.db.models.budget import (
     BudgetItem,
     BudgetPosition,
     BudgetRevision,
+    ProjectPurchaseCategory,
 )
 from app.db.models.purchase import PurchaseProcess
 from app.db.models.personnel import Person, PersonnelAssignment
@@ -23,6 +24,7 @@ __all__ = [
     "BudgetPosition",
     "BudgetRevision",
     "BudgetItem",
+    "ProjectPurchaseCategory",
     "EXPENSE_CATEGORIES",
     "PurchaseProcess",
     "Person",

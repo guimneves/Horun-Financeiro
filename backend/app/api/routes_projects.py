@@ -21,7 +21,7 @@ from app.core.permissions import (
     require_super_admin,
 )
 from app.db.models.audit import AuditEvent
-from app.db.models.budget import BudgetItem, BudgetPosition, BudgetRevision
+from app.db.models.budget import BudgetItem, BudgetPosition, BudgetRevision, ProjectPurchaseCategory
 from app.db.models.document import Document
 from app.db.models.drive_state import DriveUnlinkedPath
 from app.db.models.funding import FundingInstallment
@@ -258,7 +258,7 @@ def delete_project(
     session.flush()
     session.exec(delete(BudgetRevision).where(BudgetRevision.project_id == project_id))  # type: ignore[call-overload]
     session.exec(delete(BudgetPosition).where(BudgetPosition.project_id == project_id))  # type: ignore[call-overload]
-    for model in (FundingInstallment, ProjectMembership, DriveUnlinkedPath, AuditEvent):
+    for model in (FundingInstallment, ProjectMembership, DriveUnlinkedPath, AuditEvent, ProjectPurchaseCategory):
         session.exec(delete(model).where(model.project_id == project_id))  # type: ignore[call-overload]
     session.delete(project)
     session.commit()
