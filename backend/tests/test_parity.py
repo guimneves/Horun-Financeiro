@@ -192,7 +192,9 @@ def test_event_history_records_who_did_what(client):
     assert all(e["detail"] == "{}" for e in colab_events)
 
 
-def test_event_history_is_visible_only_to_members(client):
+def test_event_history_is_visible_only_to_members(client, dev_mode):
+    # Esquema de desenvolvimento: só membros. No modo módulo todos que chegam
+    # ao módulo veem (tests/test_core_roles.py).
     project, _item = _project_with_active_budget(client)
     outsider = {"X-Horun-User-Id": "u-out", "X-Horun-User": "out", "X-Horun-Role": "user"}
     assert client.get(f"/projects/{project['id']}/events", headers=outsider).status_code == 403

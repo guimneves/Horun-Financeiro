@@ -1,13 +1,23 @@
 """Autorização DENTRO do módulo — separada da identidade que o Core injeta
 (app.core.identity só diz quem é a pessoa, não o que ela pode fazer aqui).
 
-Papéis do módulo (coordenador/colaborador) são geridos por
-`ProjectMembership`, uma tabela deste módulo — o `role` do cabeçalho do
-Core (`X-Horun-Role`) só é usado no único ponto em que este módulo precisa
-saber se a pessoa é administradora máxima do Horun: autorizar a criação de
-um projeto novo (ver Prompt_Horun_Core.md, seção 6 — o Core decide *se* a
-pessoa entra no módulo; o módulo decide *o que* ela pode fazer aqui
-dentro).
+Dois esquemas (decisão de 06/10/2026):
+
+* **Modo módulo** (atrás do Horun Core, `module_mode()` verdadeiro): o papel
+  vem do CARGO no Horun (`X-Horun-Level`). Níveis 1 (administrador máximo) e
+  2 (coordenador/a) são coordenador em TODOS os projetos; qualquer outra
+  pessoa que chegou ao módulo (o Core já conferiu o acesso ao módulo) é
+  colaborador em todos. Não precisa de linha em `ProjectMembership` e a
+  senha mestra é ignorada. `ProjectMembership` continua existindo só como
+  "participantes do projeto" — quem recebe os avisos (services/notifications.py).
+
+* **Desenvolvimento** (HORUN_DEV_MODE=true, `Apresentar_Financeiro.bat`):
+  o esquema antigo — papel pela tabela `ProjectMembership` deste módulo,
+  elevação a coordenador pela senha mestra (routes_auth.py). É o que o
+  seletor "Ver como" usa para trocar de visão rapidamente.
+
+Para portar a outros módulos (Reagentes, Amostras): basta `module_mode()`,
+`core_role()` e o primeiro bloco de `get_membership`.
 """
 
 from __future__ import annotations
@@ -15,10 +25,22 @@ from __future__ import annotations
 from fastapi import Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.identity import HorunIdentity, get_identity
+from app.core import identity as identity_module
+from app.core.identity import LEVEL_COORDENADOR, HorunIdentity, get_identity
 from app.core.security import verify_coordenador_token
-from app.db.models.project import ProjectMembership
+from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
+
+
+def module_mode() -> bool:
+    """Papéis pelo cargo no Horun? Sempre que NÃO é desenvolvimento. Lido do
+    módulo a cada chamada, para os testes poderem ligar o DEV_MODE."""
+    return not identity_module.DEV_MODE
+
+
+def core_role(identity: HorunIdentity) -> str:
+    """Papel no módulo pelo cargo no Horun: níveis 1–2 coordenam, o resto colabora."""
+    return "coordenador" if identity.level <= LEVEL_COORDENADOR else "colaborador"
 
 
 def get_membership(
@@ -27,6 +49,18 @@ def get_membership(
     session: Session = Depends(get_session),
     x_horun_coordenador_token: str | None = Header(default=None),
 ) -> ProjectMembership:
+    if module_mode():
+        if session.get(Project, project_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Projeto não encontrado.")
+        # Objeto solto (sem id), NUNCA gravado no banco: só carrega o papel
+        # efetivo para as rotas (redação de valores, require_coordenador).
+        return ProjectMembership(
+            project_id=project_id,
+            user_id=identity.user_id,
+            username=identity.username,
+            role=core_role(identity),
+        )
+
     membership = session.exec(
         select(ProjectMembership).where(
             ProjectMembership.project_id == project_id,

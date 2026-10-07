@@ -1,7 +1,10 @@
-"""HORUN_DEV_MODE fica desligado nos testes de propósito — os testes de
-permissão (coordenador vs colaborador, admin do Core) precisam simular
-usuários DIFERENTES via cabeçalho, e em DEV_MODE a identidade é sempre o
-mesmo usuário fixo (ver app/core/identity.py)."""
+"""HORUN_DEV_MODE fica desligado nos testes de propósito — os testes rodam
+como o módulo atrás do Core (papel pelo cargo no Horun, ver
+app/core/permissions.py), simulando usuários DIFERENTES via cabeçalho.
+
+O esquema de desenvolvimento (cadastro de membros dá o acesso + senha
+mestra) é testado com o fixture `dev_mode`, que liga o DEV_MODE só durante
+o teste — os cabeçalhos continuam valendo nele (é o seletor "Ver como")."""
 
 from __future__ import annotations
 
@@ -32,6 +35,8 @@ from app.api.routes_auth import _failed_attempts  # noqa: E402
 from app.db.session import create_db_and_tables, engine  # noqa: E402
 from app.main import app  # noqa: E402
 
+# Sem X-Horun-Level: "admin" conta como nível 2 (coordenador/a) e "user" como 5
+# (app/core/identity.py, parse_level).
 ADMIN = {"X-Horun-User-Id": "u-admin", "X-Horun-User": "admin", "X-Horun-Role": "admin"}
 COLAB = {"X-Horun-User-Id": "u-colab", "X-Horun-User": "colaborador", "X-Horun-Role": "user"}
 OUTSIDER = {"X-Horun-User-Id": "u-outsider", "X-Horun-User": "outsider", "X-Horun-Role": "user"}
@@ -51,3 +56,13 @@ def client():
     # com o prefixo real da API (main.py). Para bater na raiz (ex. /health),
     # use uma URL absoluta: client.get("http://testserver/health").
     return TestClient(app, base_url="http://testserver/api/")
+
+
+@pytest.fixture
+def dev_mode(monkeypatch):
+    """Esquema de desenvolvimento (Apresentar_Financeiro.bat): papel pelo
+    cadastro de membros e senha mestra (app/core/permissions.py)."""
+    from app.core import identity
+
+    monkeypatch.setattr(identity, "DEV_MODE", True)
+    return True

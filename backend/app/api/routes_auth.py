@@ -3,6 +3,9 @@ projeto). Quem sabe a senha ganha `role="coordenador"` transparente em
 QUALQUER projeto que já consiga abrir (ver core/permissions.py,
 `get_membership`) — sem precisar estar cadastrado como coordenador na
 tabela de membros daquele projeto especificamente.
+
+Só no esquema de desenvolvimento (decisão de 06/10/2026): no modo módulo o
+papel vem do cargo no Horun e as rotas de senha respondem 409.
 """
 
 from __future__ import annotations
@@ -12,7 +15,9 @@ import time
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session
 
+from app.core import identity as identity_module
 from app.core.identity import HorunIdentity, get_identity
+from app.core.permissions import core_role, module_mode
 from app.core.security import hash_password, issue_coordenador_token, verify_coordenador_token, verify_password
 from app.db.models.module_settings import ModuleSettings
 from app.db.session import get_session
@@ -26,12 +31,28 @@ def whoami(identity: HorunIdentity = Depends(get_identity)) -> dict:
     """Quem é a pessoa, para a tela decidir o que mostrar (ex. "Novo
     projeto" só para o admin do Core, que é quem pode criar — a rota
     continua conferindo por conta própria)."""
+    roles_from_core = module_mode()
     return {
         "user_id": identity.user_id,
         "username": identity.username,
         "role": identity.role,
         "is_core_admin": identity.role == "admin",
+        "level": identity.level,
+        "dev_mode": identity_module.DEV_MODE,
+        # true = papéis pelo cargo no Horun (sem senha mestra); a tela então
+        # usa `module_role` (o mesmo papel em todos os projetos).
+        "roles_from_core": roles_from_core,
+        "module_role": core_role(identity) if roles_from_core else None,
     }
+
+
+def _reject_in_module_mode() -> None:
+    if module_mode():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Neste servidor o papel vem do seu cargo no Horun — não há senha de coordenador "
+            "(ela só existe no modo de desenvolvimento).",
+        )
 
 
 def _get_module_settings(session: Session) -> ModuleSettings:
@@ -71,6 +92,7 @@ def login_as_coordenador(
     session: Session = Depends(get_session),
     identity: HorunIdentity = Depends(get_identity),
 ):
+    _reject_in_module_mode()
     _check_lockout(identity.user_id)
     settings_row = _get_module_settings(session)
     if not verify_password(body.password, settings_row.coordenador_password_hash):
@@ -87,6 +109,7 @@ def change_coordenador_password(
     x_horun_coordenador_token: str | None = Header(default=None),
     session: Session = Depends(get_session),
 ):
+    _reject_in_module_mode()
     if not verify_coordenador_token(x_horun_coordenador_token):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão de coordenador inválida ou expirada.")
     settings_row = _get_module_settings(session)

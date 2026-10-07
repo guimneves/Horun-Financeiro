@@ -6,10 +6,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from app.core.config import settings
 from tests.conftest import ADMIN, COLAB
 
 DEFAULT_PASSWORD = settings.default_coordenador_password
+
+# A senha mestra só existe no modo de desenvolvimento (decisão de 06/10/2026);
+# no modo módulo ela é ignorada (tests/test_core_roles.py).
+pytestmark = pytest.mark.usefixtures("dev_mode")
 
 
 def _project_with_budget(client):
@@ -193,7 +199,11 @@ def test_successful_login_resets_the_failure_counter(client):
     assert _login(client).status_code == 200
 
 
-def test_login_requires_core_identity(client):
+def test_login_requires_core_identity(client, monkeypatch):
+    from app.core import identity
+
+    # Fora do DEV_MODE: sem os cabeçalhos do Core, nem chega à senha.
+    monkeypatch.setattr(identity, "DEV_MODE", False)
     assert client.post("/auth/coordenador-session", json={"password": DEFAULT_PASSWORD}).status_code == 401
 
 
@@ -206,8 +216,13 @@ def test_without_initial_password_coordinator_login_is_unavailable(client, monke
     with Session(db_session.engine) as s:
         s.delete(s.get(ModuleSettings, 1))
         s.commit()
+    from app.core import identity
+
     monkeypatch.setattr(settings, "default_coordenador_password", "")
+    # No DEV_MODE haveria a senha provisória; fora dele, sem senha nada é criado.
+    monkeypatch.setattr(identity, "DEV_MODE", False)
     db_session._ensure_module_settings()  # sem senha: não cria nada
+    monkeypatch.setattr(identity, "DEV_MODE", True)
     resp = _login(client)
     assert resp.status_code == 503
     assert "MODULE_COORDENADOR_PASSWORD" in resp.json()["detail"]

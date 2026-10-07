@@ -22,7 +22,9 @@ def test_duplicate_project_code_rejected(client):
     assert resp.status_code == 409
 
 
-def test_non_member_cannot_read_project(client):
+def test_non_member_cannot_read_project(client, dev_mode):
+    # Esquema de desenvolvimento (membros dão o acesso); no modo módulo, ver
+    # tests/test_core_roles.py.
     project = client.post("/projects", json={"code": "1", "name": "X"}, headers=ADMIN).json()
     resp = client.get(f"/projects/{project['id']}", headers=OUTSIDER)
     assert resp.status_code == 403

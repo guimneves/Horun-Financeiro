@@ -14,6 +14,12 @@ link leva à tela, onde cada um vê o que o seu papel permite.
 | compra enviada para autorização          | coordenadores do projeto        |
 | compra autorizada / rejeitada            | quem criou o processo           |
 | nota fiscal registrada acima do saldo    | coordenadores do projeto        |
+
+"Coordenadores do projeto" = participantes marcados como coordenador na tela
+Membros (`ProjectMembership`). No modo módulo essa lista não dá acesso (o
+papel vem do cargo no Horun, core/permissions.py) — só diz quem recebe os
+avisos. Projeto sem nenhum coordenador marcado: o aviso vai para os cargos
+1 e 2 do Horun (administrador máximo e coordenadores), pelo `levels` do Core.
 """
 
 from __future__ import annotations
@@ -25,6 +31,9 @@ from app.core.identity import HorunIdentity
 from app.db.models.budget import BudgetPosition
 from app.db.models.project import Project, ProjectMembership
 from app.db.models.purchase import PurchaseProcess
+
+# Cargos do Horun avisados quando o projeto não tem coordenador marcado.
+FALLBACK_COORDINATOR_LEVELS = [1, 2]
 
 
 def process_link(process: PurchaseProcess) -> str:
@@ -40,6 +49,19 @@ def coordinator_ids(session: Session, project_id: int) -> list[str]:
             )
         )
     )
+
+
+def coordinator_recipients(
+    session: Session, project_id: int, actor: HorunIdentity | None
+) -> tuple[list[str], list[int]]:
+    """(ids, níveis) para um aviso "aos coordenadores do projeto". Sem
+    coordenador marcado no projeto, cai para os níveis 1–2 do Core (quem
+    fez a ação pode receber o próprio aviso nesse caso — o Core não sabe
+    quem foi)."""
+    ids = coordinator_ids(session, project_id)
+    if not ids:
+        return [], list(FALLBACK_COORDINATOR_LEVELS)
+    return _without_actor(ids, actor), []
 
 
 def _without_actor(user_ids: list[str], actor: HorunIdentity | None) -> list[str]:
@@ -69,13 +91,14 @@ def notify_transition(
     link = process_link(process)
 
     if action == "solicitar_autorizacao":
-        recipients = _without_actor(coordinator_ids(session, process.project_id), actor)
+        recipients, levels = coordinator_recipients(session, process.project_id, actor)
         notify_module.notify(
             "Compra aguardando autorização",
             f"{who} enviou a compra {_describe(session, process)} para autorização.\n\n"
             "Abra o processo para conferir os documentos e clicar em \"Autorizar compra\" ou \"Rejeitar\".",
             link,
             user_ids=recipients,
+            levels=levels,
         )
     elif action in ("autorizar", "rejeitar"):
         recipients = _without_actor([process.created_by_user_id], actor)
@@ -94,7 +117,7 @@ def notify_transition(
             )
         notify_module.notify(subject, text, link, user_ids=recipients)
     elif action == "emitir_nota_fiscal" and over_balance:
-        recipients = _without_actor(coordinator_ids(session, process.project_id), actor)
+        recipients, levels = coordinator_recipients(session, process.project_id, actor)
         notify_module.notify(
             "Nota fiscal acima do saldo do item",
             f"{who} registrou a nota fiscal da compra {_describe(session, process)} com valor acima do saldo "
@@ -102,4 +125,5 @@ def notify_transition(
             "Abra o processo e o Orçamento para ver os valores e decidir se o item precisa de remanejamento.",
             link,
             user_ids=recipients,
+            levels=levels,
         )

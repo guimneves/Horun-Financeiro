@@ -106,8 +106,12 @@ def _ensure_module_settings() -> None:
                 # Sem senha inicial definida: o registro é criado na próxima
                 # subida com MODULE_COORDENADOR_PASSWORD; até lá, o login de
                 # coordenador responde "não configurado".
-                logger.warning(
-                    "MODULE_COORDENADOR_PASSWORD não definida: login de coordenador indisponível."
+                # Normal fora do DEV_MODE: desde 06/10/2026 o papel vem do
+                # cargo no Horun e a senha mestra só é usada no
+                # desenvolvimento (core/permissions.py).
+                logger.info(
+                    "MODULE_COORDENADOR_PASSWORD não definida: sem senha de coordenador "
+                    "(só usada no modo de desenvolvimento)."
                 )
                 return
             session.add(ModuleSettings(id=1, coordenador_password_hash=hash_password(password)))

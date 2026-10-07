@@ -7,7 +7,7 @@ from app.core.drive import DriveError, DriveNotFound, project_folder
 from app.core.config import settings
 from app.core.drive_backend import get_drive_backend
 from app.core.identity import HorunIdentity, get_identity
-from app.core.permissions import get_membership, require_coordenador, require_core_admin
+from app.core.permissions import core_role, get_membership, module_mode, require_coordenador, require_core_admin
 from app.db.models.project import Project, ProjectMembership
 from app.db.session import get_session
 from app.schemas.project import (
@@ -26,6 +26,11 @@ def list_projects(
     identity: HorunIdentity = Depends(get_identity),
     session: Session = Depends(get_session),
 ):
+    if module_mode():
+        # Papéis pelo cargo no Horun: todo projeto aparece para quem chegou ao
+        # módulo, com o mesmo papel em todos (core/permissions.py).
+        role = core_role(identity)
+        return [ProjectOut(**p.model_dump(), my_role=role) for p in session.exec(select(Project)).all()]
     memberships = session.exec(
         select(ProjectMembership).where(ProjectMembership.user_id == identity.user_id)
     ).all()
@@ -61,9 +66,10 @@ def create_project(
     # chamado depois disso, viria vazio.
     project_out = ProjectOut(**project.model_dump(), my_role="coordenador")
 
-    # Quem cria o projeto já entra como coordenador — sem isso, ninguém
-    # mais conseguiria acessá-lo (get_membership bloquearia até o próprio
-    # criador).
+    # Quem cria o projeto já entra como coordenador — sem isso, no esquema
+    # de desenvolvimento ninguém mais conseguiria acessá-lo (get_membership
+    # bloquearia até o próprio criador); no modo módulo, é quem passa a
+    # receber os avisos do projeto (services/notifications.py).
     membership = ProjectMembership(
         project_id=project.id,
         user_id=identity.user_id,
