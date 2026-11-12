@@ -143,3 +143,24 @@ docker compose up -d --build
 
 O banco e os documentos ficam nos volumes `financeiro_pgdata` e
 `financeiro_uploads` (sobrevivem ao rebuild; só somem com `docker compose down -v`).
+
+## Backup
+
+O serviço `db-backup` grava em `BACKUP_DIR`, todo dia:
+
+- `financeiro_<data>.dump` — o banco (guardado `BACKUP_KEEP_DAYS` dias);
+- `financeiro_arquivos_<data>.tar.gz` — os documentos enviados pela tela
+  (guardado `BACKUP_FILES_KEEP_DAYS` dias, padrão 7);
+- `financeiro_ULTIMO_BACKUP_OK.txt` — data da última rodada sem erro. Se essa
+  data estiver velha, o backup está falhando: veja `docker compose logs db-backup`.
+
+Restaurar os documentos (com o módulo parado), num PowerShell na pasta do repositório:
+
+```powershell
+docker compose stop financeiro-backend
+docker run --rm -v horun-financeiro_financeiro_uploads:/data/uploads -v C:/HorunBackups/financeiro:/b alpine tar -xzf /b/financeiro_arquivos_AAAA-MM-DD_HHMM.tar.gz -C /data/uploads
+docker compose start financeiro-backend
+```
+
+Restaure banco e documentos **da mesma data**, para os registros apontarem para
+arquivos que existem. O banco: `Prompt_Horun_Core.md`, seção 9.4, do Horun Core.

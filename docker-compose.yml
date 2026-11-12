@@ -50,9 +50,14 @@ services:
       BACKUP_PREFIX: financeiro
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      # Arquivos enviados pela tela também entram no backup (revisão de
+      # 12/11/2026 — antes só o banco tinha cópia): financeiro_arquivos_<data>.tar.gz
+      BACKUP_FILES_DIR: /arquivos
+      BACKUP_FILES_KEEP_DAYS: ${BACKUP_FILES_KEEP_DAYS:-7}
     volumes:
       - ${BACKUP_DIR:-./backups}:/backups
       - ./deploy/backup/pg_backup.sh:/pg_backup.sh:ro
+      - financeiro_uploads:/arquivos:ro
     entrypoint: ["/bin/sh", "/pg_backup.sh"]
 
   financeiro-backend:
