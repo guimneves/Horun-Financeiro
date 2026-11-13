@@ -27,7 +27,7 @@ No `.env`, preencha:
 - `MODULE_COORDENADOR_PASSWORD` — opcional, deixe vazia: no servidor o papel vem
   do cargo no Horun (níveis 1–2 coordenam, os demais colaboram) e não há senha
   de coordenador; ela só existe no desenvolvimento local.
-- `BACKUP_DIR` — uma pasta do Windows fora do Docker (ex. `C:/HorunBackups/financeiro`).
+- `BACKUP_DIR` — uma pasta do Windows fora do Docker (ex. `C:/HorunBackups/Horun-financeiro-backup`).
 - Deixe `MODULE_DRIVE_MODE=agent` e `MODULE_DRIVE_AGENT_ROOT=financeiro`.
 - `MODULE_DRIVE_WRITE=true` se os documentos anexados no Financeiro devem ir
   também para a pasta do processo no drive (exige `"mode": "read-write"` no
@@ -146,7 +146,7 @@ O banco e os documentos ficam nos volumes `financeiro_pgdata` e
 
 ## Backup
 
-O serviço `db-backup` grava em `BACKUP_DIR`, todo dia:
+O serviço `db-backup` grava em `BACKUP_DIR`, todo dia (a hora no nome é UTC, 3 h à frente de Brasília):
 
 - `financeiro_<data>.dump` — o banco (guardado `BACKUP_KEEP_DAYS` dias);
 - `financeiro_arquivos_<data>.tar.gz` — os documentos enviados pela tela
@@ -158,7 +158,7 @@ Restaurar os documentos (com o módulo parado), num PowerShell na pasta do repos
 
 ```powershell
 docker compose stop financeiro-backend
-docker run --rm -v horun-financeiro_financeiro_uploads:/data/uploads -v C:/HorunBackups/financeiro:/b alpine tar -xzf /b/financeiro_arquivos_AAAA-MM-DD_HHMM.tar.gz -C /data/uploads
+docker run --rm -v horun-financeiro_financeiro_uploads:/data/uploads -v C:/HorunBackups/Horun-financeiro-backup:/b alpine tar -xzf /b/financeiro_arquivos_AAAA-MM-DD_HHMM.tar.gz -C /data/uploads
 docker compose start financeiro-backend
 ```
 
